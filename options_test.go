@@ -186,10 +186,3 @@ func TestWithBufferMaxMemBytes(t *testing.T) {
 	assert.NoError(t, err)
 	defer func() { assert.NoError(t, record.Close()) }()
 }
-
-func TestWithUrlParserOptions(t *testing.T) {
-	// Just verify the option can be applied without error
-	opts := newOptions(WithUrlParserOptions())
-	// No panic or error means success; urlParserOptions starts as nil and appending nothing keeps it nil
-	_ = opts
-}

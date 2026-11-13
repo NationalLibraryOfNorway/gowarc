@@ -22,8 +22,22 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/nlnwa/gowarc/v3"
+	"github.com/nationallibraryofnorway/gowarc/v3"
+	"github.com/nationallibraryofnorway/whatwg-url/url"
 )
+
+func ExampleWithUrlParserOptions() {
+	builder := gowarc.NewRecordBuilder(gowarc.Resource,
+		gowarc.WithSpecViolationPolicy(gowarc.ErrFail),
+		gowarc.WithUrlParserOptions(url.WithFailOnValidationError()),
+	)
+	builder.AddWarcHeader(gowarc.WarcRecordID, "<urn:example:record>")
+	builder.AddWarcHeader(gowarc.WarcDate, "2026-11-13T12:00:00Z")
+	builder.AddWarcHeader(gowarc.WarcTargetURI, "https://example.org/%zz")
+	_, _, err := builder.Build()
+	fmt.Println(err != nil)
+	// Output: true
+}
 
 func ExampleNewRecordBuilder() {
 	builder := gowarc.NewRecordBuilder(gowarc.Response)

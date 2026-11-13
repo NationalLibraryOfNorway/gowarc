@@ -23,7 +23,7 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/nlnwa/gowarc/v3/internal/diskbuffer"
+	"github.com/nationallibraryofnorway/gowarc/v3/internal/diskbuffer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

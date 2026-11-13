@@ -1,7 +1,7 @@
-[![Test](https://github.com/nlnwa/gowarc/actions/workflows/test.yml/badge.svg)](https://github.com/nlnwa/gowarc/actions/workflows/test.yml)
-[![Release](https://img.shields.io/github/release/nlnwa/gowarc.svg)](https://github.com/nlnwa/gowarc/releases/latest)
-[![License](https://img.shields.io/github/license/nlnwa/gowarc)](/LICENSE)
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/nlnwa/gowarc/v3.svg)](https://pkg.go.dev/github.com/nlnwa/gowarc/v3)
+[![Test](https://github.com/nationallibraryofnorway/gowarc/actions/workflows/test.yml/badge.svg)](https://github.com/nationallibraryofnorway/gowarc/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/release/nationallibraryofnorway/gowarc.svg)](https://github.com/nationallibraryofnorway/gowarc/releases/latest)
+[![License](https://img.shields.io/github/license/nationallibraryofnorway/gowarc)](/LICENSE)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/nationallibraryofnorway/gowarc/v3.svg)](https://pkg.go.dev/github.com/nationallibraryofnorway/gowarc/v3)
 
 # gowarc
 
@@ -17,10 +17,39 @@ at https://iipc.github.io/warc-specifications/specifications/warc-format/warc-1.
 
 ## Library documentation
 
+### Requirements and migration
+
+Go 1.27 or later is required. The module is now
+`github.com/nationallibraryofnorway/gowarc/v3`, and URL validation uses
+`github.com/nationallibraryofnorway/whatwg-url v0.8.0`.
+
+To migrate, replace imports of `github.com/nlnwa/gowarc/v3` with the new
+module path. If you use `WithUrlParserOptions`, also replace imports of
+`github.com/nlnwa/whatwg-url/url` with
+`github.com/nationallibraryofnorway/whatwg-url/url`: parser options from the
+old package are different Go types and cannot be passed to the new API.
+Then update the dependency and run `go mod tidy`.
+
+`WithUrlParserOptions` now applies to URI headers and the URIs inside WARC
+record IDs and identifier references. Repeated calls append options in order.
+Identifiers must still have exactly one correctly positioned outer `<...>`
+pair; valid non-UUID identifiers such as `<urn:example:record>` are accepted.
+
+Default parsing accepts recoverable WHATWG issues. To reject them, pass
+`url.WithFailOnValidationError()` to `WithUrlParserOptions`; failures follow
+`WithSpecViolationPolicy` (ignore, warn, or fail). The updated parser's
+conformance fixes can change which inputs are accepted, but validation does
+not normalize stored URI text. Failed header validation also preserves the
+original value, including when a warning is returned.
+
+See the [whatwg-url migration guide](https://github.com/nationallibraryofnorway/whatwg-url/blob/v0.8.0/README.md#upgrading-from-v062)
+for changed parser options, including `WithReportValidationErrors(bool)` and
+numeric ports in `WithSpecialSchemes(map[string]uint16)`.
+
 #### Installation
 
 ```
-$ go get github.com/nlnwa/gowarc/v3
+$ go get github.com/nationallibraryofnorway/gowarc/v3
 ```
 
 #### Create a new WARC record
@@ -32,7 +61,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/nlnwa/gowarc/v3"
+	"github.com/nationallibraryofnorway/gowarc/v3"
 )
 
 func main() {
@@ -57,7 +86,7 @@ func main() {
 
 ### godoc
 
-For complete documentation and examples consult the godoc online at: https://pkg.go.dev/github.com/nlnwa/gowarc/v3
+For complete documentation and examples consult the godoc online at: https://pkg.go.dev/github.com/nationallibraryofnorway/gowarc/v3
 
 
 ## Command line tools

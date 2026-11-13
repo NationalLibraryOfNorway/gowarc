@@ -18,8 +18,8 @@ package gowarc
 
 import (
 	"github.com/google/uuid"
-	"github.com/nlnwa/gowarc/v3/internal/diskbuffer"
-	"github.com/nlnwa/whatwg-url/url"
+	"github.com/nationallibraryofnorway/gowarc/v3/internal/diskbuffer"
+	"github.com/nationallibraryofnorway/whatwg-url/url"
 )
 
 type warcRecordOptions struct {
@@ -328,6 +328,13 @@ func WithBufferMaxMemBytes(size int64) WarcRecordOption {
 	}
 }
 
+// WithUrlParserOptions configures URI validation for URI headers and the URIs
+// inside bracketed WARC record IDs and references. Options from repeated calls
+// are appended in order. Validation never replaces the original URI text with
+// its parsed or normalized form, and identifier brackets are checked separately.
+//
+// By default, recoverable WHATWG validation issues are accepted. Use
+// url.WithFailOnValidationError to reject them according to WithSpecViolationPolicy.
 func WithUrlParserOptions(opts ...url.ParserOption) WarcRecordOption {
 	return func(o *warcRecordOptions) {
 		o.urlParserOptions = append(o.urlParserOptions, opts...)

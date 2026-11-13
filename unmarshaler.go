@@ -24,7 +24,7 @@ import (
 	"io"
 
 	"github.com/klauspost/compress/gzip"
-	"github.com/nlnwa/gowarc/v3/internal/countingreader"
+	"github.com/nationallibraryofnorway/gowarc/v3/internal/countingreader"
 )
 
 // Unmarshaler is the interface implemented by types that can unmarshal a WARC record.

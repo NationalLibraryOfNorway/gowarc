@@ -26,7 +26,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/nlnwa/whatwg-url/url"
+	"github.com/nationallibraryofnorway/whatwg-url/url"
 )
 
 const (
@@ -70,7 +70,9 @@ func validateHeader(wf *WarcFields, version *WarcVersion, opts *warcRecordOption
 			name, def := normalizeName(nv.Name)
 			value, err := def.validationFunc(opts, name, nv.Value, version, rt, def)
 			nv.Name = name
-			nv.Value = value
+			if err == nil {
+				nv.Value = value
+			}
 			if err != nil {
 				switch opts.errSpec {
 				case ErrWarn:
@@ -307,8 +309,7 @@ var (
 		if shouldValidate, err := checkLegal(opts, name, version, recordType, def); err != nil {
 			return "", err
 		} else if shouldValidate {
-			urlParser := url.NewParser(opts.urlParserOptions...)
-			if _, err := urlParser.Parse(value); err != nil {
+			if err := validateURI(opts, value); err != nil {
 				return "", err
 			}
 		}
@@ -345,10 +346,10 @@ var (
 			return "", err
 		} else if shouldValidate {
 			v := strings.Trim(value, "<>")
-			if len(value) != len(v)+2 {
+			if value != "<"+v+">" {
 				return "", fmt.Errorf("WARC id should be encapsulated by <>")
 			}
-			if _, err := url.Parse(v); err != nil {
+			if err := validateURI(opts, v); err != nil {
 				return "", err
 			}
 		}
@@ -387,6 +388,11 @@ var (
 		return value, nil
 	}
 )
+
+func validateURI(opts *warcRecordOptions, value string) error {
+	_, err := url.NewParser(opts.urlParserOptions...).Parse(value)
+	return err
+}
 
 func checkLegal(opts *warcRecordOptions, name string, version *WarcVersion, recordType RecordType, def fieldDef) (shouldValidate bool, err error) {
 	// All fields are allowed for unknown record types
