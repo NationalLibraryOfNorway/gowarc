@@ -17,7 +17,8 @@
 package gowarc
 
 import (
-	"github.com/google/uuid"
+	"uuid"
+
 	"github.com/nationallibraryofnorway/gowarc/v3/internal/diskbuffer"
 	"github.com/nationallibraryofnorway/whatwg-url/url"
 )
@@ -55,7 +56,7 @@ const (
 
 // defaultIdGenerator is the default function used to generate record ids.
 var defaultIdGenerator = func() (string, error) {
-	return uuid.New().URN(), nil
+	return "urn:uuid:" + uuid.NewV4().String(), nil
 }
 
 // WarcRecordOption configures validation, marshaling and unmarshaling of WARC records.
@@ -64,7 +65,6 @@ type WarcRecordOption func(*warcRecordOptions)
 func (f WarcRecordOption) apply(o *warcRecordOptions) { f(o) }
 
 func defaultWarcRecordOptions() warcRecordOptions {
-	uuid.EnableRandPool()
 	defaultDigestAlgorithm := normalizeAlgorithmName("sha256")
 	return warcRecordOptions{
 		warcVersion:              V1_1,

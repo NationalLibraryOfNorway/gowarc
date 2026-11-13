@@ -1,6 +1,7 @@
 package gowarc
 
 import (
+	"regexp"
 	"strconv"
 	"testing"
 
@@ -185,4 +186,14 @@ func TestWithBufferMaxMemBytes(t *testing.T) {
 	record, _, err := rb.Build()
 	assert.NoError(t, err)
 	defer func() { assert.NoError(t, record.Close()) }()
+}
+
+func TestDefaultRecordIDFormat(t *testing.T) {
+	id, err := defaultIdGenerator()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, pattern := id, `^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`; !regexp.MustCompile(pattern).MatchString(got) {
+		t.Errorf("value %q does not match %q", got, pattern)
+	}
 }
