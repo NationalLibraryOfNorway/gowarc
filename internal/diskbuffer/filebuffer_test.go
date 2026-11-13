@@ -2,110 +2,194 @@ package diskbuffer
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestFileBuffer_Basic(t *testing.T) {
 	fb, err := newFileBuffer(100, t.TempDir())
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, fb.close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := fb.close(); err != nil {
+			t.Errorf("fb.close() error = %v", err)
+		}
+	}()
 
-	assert.Equal(t, int64(0), fb.Size())
-	assert.Equal(t, int64(100), fb.Limit())
+	if got, want := fb.Size(), int64(0); got != want {
+		t.Errorf("fb.Size() = %#v, want %#v", got, want)
+	}
+	if got, want := fb.Limit(), int64(100); got != want {
+		t.Errorf("fb.Limit() = %#v, want %#v", got, want)
+	}
 
 	n, err := fb.write([]byte("hello"))
-	require.NoError(t, err)
-	assert.Equal(t, 5, n)
-	assert.Equal(t, int64(5), fb.Size())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 5; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := fb.Size(), int64(5); got != want {
+		t.Errorf("fb.Size() = %#v, want %#v", got, want)
+	}
 }
 
 func TestFileBuffer_Write_ExceedsLimit(t *testing.T) {
 	fb, err := newFileBuffer(5, t.TempDir())
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, fb.close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := fb.close(); err != nil {
+			t.Errorf("fb.close() error = %v", err)
+		}
+	}()
 
 	// Write more than limit
 	n, err := fb.write([]byte("hello world"))
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
-	assert.Equal(t, 5, n) // partial write
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
+	if got, want := n, 5; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	} // partial write
 
 	// Writing when no free space
 	n, err = fb.write([]byte("x"))
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
-	assert.Equal(t, 0, n)
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
+	if got, want := n, 0; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
 }
 
 func TestFileBuffer_ReadAt(t *testing.T) {
 	fb, err := newFileBuffer(100, t.TempDir())
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, fb.close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := fb.close(); err != nil {
+			t.Errorf("fb.close() error = %v", err)
+		}
+	}()
 
 	_, _ = fb.write([]byte("ABCDE"))
 
 	buf := make([]byte, 3)
 	n, rerr := fb.readAt(2, buf)
-	require.NoError(t, rerr)
-	assert.Equal(t, 3, n)
-	assert.Equal(t, "CDE", string(buf))
+	if err := rerr; err != nil {
+		t.Fatalf("rerr error = %v", err)
+	}
+	if got, want := n, 3; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := string(buf), "CDE"; got != want {
+		t.Errorf("string(buf) = %#v, want %#v", got, want)
+	}
 
 	// Empty buffer case
 	fb2, err := newFileBuffer(100, t.TempDir())
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, fb2.close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := fb2.close(); err != nil {
+			t.Errorf("fb2.close() error = %v", err)
+		}
+	}()
 
 	_, rerr = fb2.readAt(0, buf)
-	assert.ErrorIs(t, rerr, io.EOF)
+	if got, want := rerr, io.EOF; !errors.Is(got, want) {
+		t.Errorf("rerr = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestFileBuffer_ReadByteAt(t *testing.T) {
 	fb, err := newFileBuffer(100, t.TempDir())
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, fb.close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := fb.close(); err != nil {
+			t.Errorf("fb.close() error = %v", err)
+		}
+	}()
 
 	_, _ = fb.write([]byte("XY"))
 	c, rerr := fb.readByteAt(0)
-	require.NoError(t, rerr)
-	assert.Equal(t, byte('X'), c)
+	if err := rerr; err != nil {
+		t.Fatalf("rerr error = %v", err)
+	}
+	if got, want := c, byte('X'); got != want {
+		t.Errorf("c = %#v, want %#v", got, want)
+	}
 
 	c, rerr = fb.readByteAt(1)
-	require.NoError(t, rerr)
-	assert.Equal(t, byte('Y'), c)
+	if err := rerr; err != nil {
+		t.Fatalf("rerr error = %v", err)
+	}
+	if got, want := c, byte('Y'); got != want {
+		t.Errorf("c = %#v, want %#v", got, want)
+	}
 }
 
 func TestFileBuffer_WriteToAt(t *testing.T) {
 	fb, err := newFileBuffer(100, t.TempDir())
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, fb.close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := fb.close(); err != nil {
+			t.Errorf("fb.close() error = %v", err)
+		}
+	}()
 
 	_, _ = fb.write([]byte("ABCDE"))
 
 	var out bytes.Buffer
 	n, werr := fb.writeToAt(2, &out)
-	require.NoError(t, werr)
-	assert.Equal(t, int64(3), n)
-	assert.Equal(t, "CDE", out.String())
+	if err := werr; err != nil {
+		t.Fatalf("werr error = %v", err)
+	}
+	if got, want := n, int64(3); got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := out.String(), "CDE"; got != want {
+		t.Errorf("out.String() = %#v, want %#v", got, want)
+	}
 
 	// Negative offset
 	_, werr = fb.writeToAt(-1, &out)
-	assert.ErrorIs(t, werr, io.EOF)
+	if got, want := werr, io.EOF; !errors.Is(got, want) {
+		t.Errorf("werr = %v, want an error matching %v", got, want)
+	}
 
 	// Beyond size
 	_, werr = fb.writeToAt(10, &out)
-	assert.ErrorIs(t, werr, io.EOF)
+	if got, want := werr, io.EOF; !errors.Is(got, want) {
+		t.Errorf("werr = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestFileBuffer_Close_Nil(t *testing.T) {
 	fb, err := newFileBuffer(100, t.TempDir())
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	err = fb.close()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Second close (file is nil)
 	err = fb.close()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }

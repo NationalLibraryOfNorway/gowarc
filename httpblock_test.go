@@ -3,6 +3,7 @@ package gowarc
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -10,8 +11,6 @@ import (
 	"testing/iotest"
 
 	"github.com/nationallibraryofnorway/gowarc/v3/internal/diskbuffer"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_httpRequestBlock_BlockDigest(t *testing.T) {
@@ -41,13 +40,21 @@ func Test_httpRequestBlock_BlockDigest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blockDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			pDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			block, val, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, tt.data, blockDigest, pDigest)
-			require.NoError(t, err)
-			require.Empty(t, val)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := val; len(got) != 0 {
+				t.Fatalf("val = %v, want empty", got)
+			}
 
 			validateBlockDigestTest(t, block, digest)
 			validatePayloadDigestTest(t, block, payloadDigest)
@@ -89,13 +96,21 @@ func Test_httpRequestBlock_Cache(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blockDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			pDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			block, val, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, tt.data, blockDigest, pDigest)
-			require.NoError(t, err)
-			require.Empty(t, val)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := val; len(got) != 0 {
+				t.Fatalf("val = %v, want empty", got)
+			}
 
 			validateCacheTest(t, block, content, digest, tt.wantCacheErr)
 		})
@@ -130,16 +145,26 @@ func Test_httpRequestBlock_IsCached(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blockDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			pDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			block, val, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, tt.data, blockDigest, pDigest)
-			require.NoError(t, err)
-			require.Empty(t, val)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := val; len(got) != 0 {
+				t.Fatalf("val = %v, want empty", got)
+			}
 
 			got := block.IsCached()
-			assert.Equal(t, tt.want, got)
+			if got, want := got, tt.want; got != want {
+				t.Errorf("got = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -173,13 +198,21 @@ func Test_httpRequestBlock_RawBytes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blockDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			pDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			block, val, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, tt.data, blockDigest, pDigest)
-			require.NoError(t, err)
-			require.Empty(t, val)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := val; len(got) != 0 {
+				t.Fatalf("val = %v, want empty", got)
+			}
 
 			validateRawBytesTest(t, tt, block, content, digest)
 		})
@@ -210,13 +243,21 @@ func Test_httpResponseBlock_BlockDigest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blockDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			pDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			block, val, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, tt.data, blockDigest, pDigest)
-			require.NoError(t, err)
-			require.Empty(t, val)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := val; len(got) != 0 {
+				t.Fatalf("val = %v, want empty", got)
+			}
 
 			validateBlockDigestTest(t, block, digest)
 			validatePayloadDigestTest(t, block, payloadDigest)
@@ -255,13 +296,21 @@ func Test_httpResponseBlock_Cache(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blockDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			pDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			block, val, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, tt.data, blockDigest, pDigest)
-			require.NoError(t, err)
-			require.Empty(t, val)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := val; len(got) != 0 {
+				t.Fatalf("val = %v, want empty", got)
+			}
 
 			validateCacheTest(t, block, content, digest, tt.wantCacheErr)
 		})
@@ -293,16 +342,26 @@ func Test_httpResponseBlock_IsCached(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blockDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			pDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			block, val, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, tt.data, blockDigest, pDigest)
-			require.NoError(t, err)
-			require.Empty(t, val)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := val; len(got) != 0 {
+				t.Fatalf("val = %v, want empty", got)
+			}
 
 			got := block.IsCached()
-			assert.Equal(t, tt.want, got)
+			if got, want := got, tt.want; got != want {
+				t.Errorf("got = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -333,13 +392,21 @@ func Test_httpResponseBlock_RawBytes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blockDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			pDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			block, val, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, tt.data, blockDigest, pDigest)
-			require.NoError(t, err)
-			require.Empty(t, val)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := val; len(got) != 0 {
+				t.Fatalf("val = %v, want empty", got)
+			}
 
 			validateRawBytesTest(t, tt, block, content, digest)
 		})
@@ -379,26 +446,44 @@ func Test_httpResponseBlock_Accessors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blockDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			pDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
-
-			block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, strings.NewReader(tt.content), blockDigest, pDigest)
-			require.NoError(t, err)
-
-			respBlock, ok := block.(HttpResponseBlock)
-			require.True(t, ok, "expected HttpResponseBlock")
-
-			assert.Equal(t, tt.wantStatusLine, respBlock.HttpStatusLine())
-			assert.Equal(t, tt.wantStatusCode, respBlock.HttpStatusCode())
-
-			hdr := respBlock.HttpHeader()
-			require.NotNil(t, hdr)
-			for key, wantVal := range tt.wantHeaders {
-				assert.Equal(t, wantVal, hdr.Get(key))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			assert.NotEmpty(t, respBlock.ProtocolHeaderBytes())
+			block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, strings.NewReader(tt.content), blockDigest, pDigest)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			respBlock, ok := block.(HttpResponseBlock)
+			if got := ok; !got {
+				t.Fatalf("ok = %v, want true: %s", got, "expected HttpResponseBlock")
+			}
+
+			if got, want := respBlock.HttpStatusLine(), tt.wantStatusLine; got != want {
+				t.Errorf("respBlock.HttpStatusLine() = %#v, want %#v", got, want)
+			}
+			if got, want := respBlock.HttpStatusCode(), tt.wantStatusCode; got != want {
+				t.Errorf("respBlock.HttpStatusCode() = %#v, want %#v", got, want)
+			}
+
+			hdr := respBlock.HttpHeader()
+			if got := hdr; got == nil {
+				t.Fatalf("hdr = %v, want non-nil", got)
+			}
+			for key, wantVal := range tt.wantHeaders {
+				if got, want := hdr.Get(key), wantVal; got != want {
+					t.Errorf("hdr.Get(key) = %#v, want %#v", got, want)
+				}
+			}
+
+			if got := respBlock.ProtocolHeaderBytes(); len(got) == 0 {
+				t.Errorf("respBlock.ProtocolHeaderBytes() = %v, want nonempty", got)
+			}
 		})
 	}
 }
@@ -426,27 +511,43 @@ func Test_httpRequestBlock_Accessors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blockDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			pDigest, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{
 				&nameValue{Name: ContentType, Value: "application/http;msgtype=request"},
 			}, strings.NewReader(tt.content), blockDigest, pDigest)
-			require.NoError(t, err)
-
-			reqBlock, ok := block.(HttpRequestBlock)
-			require.True(t, ok, "expected HttpRequestBlock")
-
-			assert.Equal(t, tt.wantRequestLine, reqBlock.HttpRequestLine())
-
-			hdr := reqBlock.HttpHeader()
-			require.NotNil(t, hdr)
-			for key, wantVal := range tt.wantHeaders {
-				assert.Equal(t, wantVal, hdr.Get(key))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			assert.NotEmpty(t, reqBlock.ProtocolHeaderBytes())
+			reqBlock, ok := block.(HttpRequestBlock)
+			if got := ok; !got {
+				t.Fatalf("ok = %v, want true: %s", got, "expected HttpRequestBlock")
+			}
+
+			if got, want := reqBlock.HttpRequestLine(), tt.wantRequestLine; got != want {
+				t.Errorf("reqBlock.HttpRequestLine() = %#v, want %#v", got, want)
+			}
+
+			hdr := reqBlock.HttpHeader()
+			if got := hdr; got == nil {
+				t.Fatalf("hdr = %v, want non-nil", got)
+			}
+			for key, wantVal := range tt.wantHeaders {
+				if got, want := hdr.Get(key), wantVal; got != want {
+					t.Errorf("hdr.Get(key) = %#v, want %#v", got, want)
+				}
+			}
+
+			if got := reqBlock.ProtocolHeaderBytes(); len(got) == 0 {
+				t.Errorf("reqBlock.ProtocolHeaderBytes() = %v, want nonempty", got)
+			}
 		})
 	}
 }
@@ -455,52 +556,88 @@ func Test_httpResponseBlock_Write(t *testing.T) {
 	content := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\n\r\nHello"
 
 	blockDigest, err := newDigest("sha1", Base16)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	pDigest, err := newDigest("sha1", Base16)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, block.Cache())
+	if err := block.Cache(); err != nil {
+		t.Fatalf("block.Cache() error = %v", err)
+	}
 
 	var buf bytes.Buffer
 	respBlock := block.(*httpResponseBlock)
 	n, err := respBlock.Write(&buf)
-	require.NoError(t, err)
-	assert.Greater(t, n, int64(0))
-	assert.Contains(t, buf.String(), "HTTP/1.1 200 OK")
-	assert.Contains(t, buf.String(), "Hello")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, bound := n, int64(0); got <= bound {
+		t.Errorf("n = %v, want > %v", got, bound)
+	}
+	if got, want := buf.String(), "HTTP/1.1 200 OK"; !strings.Contains(got, want) {
+		t.Errorf("buf.String() = %v, want to contain %v", got, want)
+	}
+	if got, want := buf.String(), "Hello"; !strings.Contains(got, want) {
+		t.Errorf("buf.String() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_httpRequestBlock_Write(t *testing.T) {
 	content := "GET /index.html HTTP/1.1\r\nHost: example.com\r\n\r\n"
 
 	blockDigest, err := newDigest("sha1", Base16)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	pDigest, err := newDigest("sha1", Base16)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{
 		&nameValue{Name: ContentType, Value: "application/http;msgtype=request"},
 	}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	require.NoError(t, block.Cache())
+	if err := block.Cache(); err != nil {
+		t.Fatalf("block.Cache() error = %v", err)
+	}
 
 	var buf bytes.Buffer
 	reqBlock := block.(*httpRequestBlock)
 	n, err := reqBlock.Write(&buf)
-	require.NoError(t, err)
-	assert.Greater(t, n, int64(0))
-	assert.Contains(t, buf.String(), "GET /index.html HTTP/1.1")
-	assert.Contains(t, buf.String(), "Host: example.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, bound := n, int64(0); got <= bound {
+		t.Errorf("n = %v, want > %v", got, bound)
+	}
+	if got, want := buf.String(), "GET /index.html HTTP/1.1"; !strings.Contains(got, want) {
+		t.Errorf("buf.String() = %v, want to contain %v", got, want)
+	}
+	if got, want := buf.String(), "Host: example.com"; !strings.Contains(got, want) {
+		t.Errorf("buf.String() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_newHttpBlock_EmptyContent(t *testing.T) {
 	blockDigest, _ := newDigest("sha1", Base16)
 	pDigest, _ := newDigest("sha1", Base16)
 	_, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, strings.NewReader(""), blockDigest, pDigest)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not a http block")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "not a http block"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_newHttpBlock_MissingEndOfHeaders_ErrWarn(t *testing.T) {
@@ -512,9 +649,15 @@ func Test_newHttpBlock_MissingEndOfHeaders_ErrWarn(t *testing.T) {
 	block, val, err := newHttpBlock(&warcRecordOptions{errSyntax: ErrWarn}, &WarcFields{
 		&nameValue{Name: ContentLength, Value: "44"},
 	}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
-	assert.NotNil(t, block)
-	assert.NotEmpty(t, val)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := block; got == nil {
+		t.Errorf("block = %v, want non-nil", got)
+	}
+	if got := val; len(got) == 0 {
+		t.Errorf("val = %v, want nonempty", got)
+	}
 }
 
 func Test_newHttpBlock_MissingEndOfHeaders_ErrFail(t *testing.T) {
@@ -525,8 +668,12 @@ func Test_newHttpBlock_MissingEndOfHeaders_ErrFail(t *testing.T) {
 	_, _, err := newHttpBlock(&warcRecordOptions{errSyntax: ErrFail}, &WarcFields{
 		&nameValue{Name: ContentLength, Value: "44"},
 	}, strings.NewReader(content), blockDigest, pDigest)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing line separator")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "missing line separator"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_newHttpBlock_MissingEndOfHeaders_FixSyntax(t *testing.T) {
@@ -540,11 +687,17 @@ func Test_newHttpBlock_MissingEndOfHeaders_FixSyntax(t *testing.T) {
 	}
 
 	block, _, err := newHttpBlock(&warcRecordOptions{fixSyntaxErrors: true}, wf, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
-	assert.NotNil(t, block)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := block; got == nil {
+		t.Errorf("block = %v, want non-nil", got)
+	}
 	// Content-Length should be updated (+2 for added CRLF)
 	length, _ := wf.GetInt64(ContentLength)
-	assert.Equal(t, int64(46), length)
+	if got, want := length, int64(46); got != want {
+		t.Errorf("length = %#v, want %#v", got, want)
+	}
 }
 
 func Test_newHttpBlock_MalformedHTTP_ErrBlockWarn(t *testing.T) {
@@ -553,9 +706,15 @@ func Test_newHttpBlock_MalformedHTTP_ErrBlockWarn(t *testing.T) {
 	blockDigest, _ := newDigest("sha1", Base16)
 	pDigest, _ := newDigest("sha1", Base16)
 	block, val, err := newHttpBlock(&warcRecordOptions{errBlock: ErrWarn}, &WarcFields{}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
-	assert.NotNil(t, block)
-	assert.NotEmpty(t, val)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := block; got == nil {
+		t.Errorf("block = %v, want non-nil", got)
+	}
+	if got := val; len(got) == 0 {
+		t.Errorf("val = %v, want nonempty", got)
+	}
 }
 
 func Test_newHttpBlock_MalformedHTTP_ErrBlockFail(t *testing.T) {
@@ -564,8 +723,12 @@ func Test_newHttpBlock_MalformedHTTP_ErrBlockFail(t *testing.T) {
 	blockDigest, _ := newDigest("sha1", Base16)
 	pDigest, _ := newDigest("sha1", Base16)
 	_, _, err := newHttpBlock(&warcRecordOptions{errBlock: ErrFail}, &WarcFields{}, strings.NewReader(content), blockDigest, pDigest)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "error in http response block")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "error in http response block"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_newHttpBlock_MalformedRequest_ErrBlockWarn(t *testing.T) {
@@ -574,9 +737,15 @@ func Test_newHttpBlock_MalformedRequest_ErrBlockWarn(t *testing.T) {
 	blockDigest, _ := newDigest("sha1", Base16)
 	pDigest, _ := newDigest("sha1", Base16)
 	block, val, err := newHttpBlock(&warcRecordOptions{errBlock: ErrWarn}, &WarcFields{}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
-	assert.NotNil(t, block)
-	assert.NotEmpty(t, val)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := block; got == nil {
+		t.Errorf("block = %v, want non-nil", got)
+	}
+	if got := val; len(got) == 0 {
+		t.Errorf("val = %v, want nonempty", got)
+	}
 }
 
 func Test_newHttpBlock_MalformedRequest_ErrBlockFail(t *testing.T) {
@@ -585,8 +754,12 @@ func Test_newHttpBlock_MalformedRequest_ErrBlockFail(t *testing.T) {
 	blockDigest, _ := newDigest("sha1", Base16)
 	pDigest, _ := newDigest("sha1", Base16)
 	_, _, err := newHttpBlock(&warcRecordOptions{errBlock: ErrFail}, &WarcFields{}, strings.NewReader(content), blockDigest, pDigest)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "error in http request block")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "error in http request block"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_newHttpBlock_RequestMissingEndOfHeaders_NoFixSyntax(t *testing.T) {
@@ -597,25 +770,39 @@ func Test_newHttpBlock_RequestMissingEndOfHeaders_NoFixSyntax(t *testing.T) {
 	block, _, err := newHttpBlock(&warcRecordOptions{fixSyntaxErrors: false}, &WarcFields{
 		&nameValue{Name: ContentLength, Value: "35"},
 	}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
-	assert.NotNil(t, block)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := block; got == nil {
+		t.Errorf("block = %v, want non-nil", got)
+	}
 	// Parser adds CRLF internally for parsing even without fixSyntaxErrors
 	reqBlock := block.(*httpRequestBlock)
-	assert.NotEmpty(t, reqBlock.HttpRequestLine())
+	if got := reqBlock.HttpRequestLine(); len(got) == 0 {
+		t.Errorf("reqBlock.HttpRequestLine() = %v, want nonempty", got)
+	}
 }
 
 func Test_newHttpBlock_WithDiskBuffer(t *testing.T) {
 	content := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello"
 	buf := diskbuffer.New()
 	_, err := buf.WriteString(content)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	blockDigest, _ := newDigest("sha1", Base16)
 	pDigest, _ := newDigest("sha1", Base16)
 	block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, buf, blockDigest, pDigest)
-	require.NoError(t, err)
-	assert.NotNil(t, block)
-	assert.True(t, block.IsCached())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := block; got == nil {
+		t.Errorf("block = %v, want non-nil", got)
+	}
+	if got := block.IsCached(); !got {
+		t.Errorf("block.IsCached() = %v, want true", got)
+	}
 }
 
 func Test_httpResponseBlock_PayloadBytes_NonCached(t *testing.T) {
@@ -624,17 +811,25 @@ func Test_httpResponseBlock_PayloadBytes_NonCached(t *testing.T) {
 	blockDigest, _ := newDigest("sha1", Base16)
 	pDigest, _ := newDigest("sha1", Base16)
 	block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// First call to PayloadBytes should work
 	r, err := block.PayloadBytes()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	_, _ = io.ReadAll(r)
 
 	// Second call on non-cached block should fail
 	_, err = block.PayloadBytes()
-	require.Error(t, err)
-	assert.Equal(t, errContentReAccessed, err)
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err, errContentReAccessed; !errors.Is(got, want) {
+		t.Errorf("err = %#v, want %#v", got, want)
+	}
 }
 
 func Test_httpResponseBlock_Close_NonCloser(t *testing.T) {
@@ -643,11 +838,15 @@ func Test_httpResponseBlock_Close_NonCloser(t *testing.T) {
 	blockDigest, _ := newDigest("sha1", Base16)
 	pDigest, _ := newDigest("sha1", Base16)
 	block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// strings.Reader payload doesn't implement io.Closer
 	err = block.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 }
 
 func Test_httpResponseBlock_Cache_NonCached(t *testing.T) {
@@ -656,18 +855,32 @@ func Test_httpResponseBlock_Cache_NonCached(t *testing.T) {
 	blockDigest, _ := newDigest("sha1", Base16)
 	pDigest, _ := newDigest("sha1", Base16)
 	block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	assert.False(t, block.IsCached())
-	require.NoError(t, block.Cache())
-	assert.True(t, block.IsCached())
+	if got := block.IsCached(); got {
+		t.Errorf("block.IsCached() = %v, want false", got)
+	}
+	if err := block.Cache(); err != nil {
+		t.Fatalf("block.Cache() error = %v", err)
+	}
+	if got := block.IsCached(); !got {
+		t.Errorf("block.IsCached() = %v, want true", got)
+	}
 
 	// PayloadBytes should work after caching
 	r, err := block.PayloadBytes()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	data, err := io.ReadAll(r)
-	require.NoError(t, err)
-	assert.Equal(t, "Hello", string(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(data), "Hello"; got != want {
+		t.Errorf("string(data) = %#v, want %#v", got, want)
+	}
 }
 
 func Test_httpResponseBlock_Write_Error(t *testing.T) {
@@ -676,13 +889,19 @@ func Test_httpResponseBlock_Write_Error(t *testing.T) {
 	blockDigest, _ := newDigest("sha1", Base16)
 	pDigest, _ := newDigest("sha1", Base16)
 	block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
-	require.NoError(t, block.Cache())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := block.Cache(); err != nil {
+		t.Fatalf("block.Cache() error = %v", err)
+	}
 
 	respBlock := block.(*httpResponseBlock)
 	w := &failWriter{err: io.ErrClosedPipe}
 	_, err = respBlock.Write(w)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 type failWriter struct {
@@ -701,13 +920,19 @@ func Test_httpRequestBlock_Write_Error(t *testing.T) {
 	block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{
 		&nameValue{Name: ContentType, Value: "application/http;msgtype=request"},
 	}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
-	require.NoError(t, block.Cache())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := block.Cache(); err != nil {
+		t.Fatalf("block.Cache() error = %v", err)
+	}
 
 	reqBlock := block.(*httpRequestBlock)
 	w := &failWriter{err: io.ErrClosedPipe}
 	_, err = reqBlock.Write(w)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func Test_httpResponseBlock_Cache_PayloadBytesError(t *testing.T) {
@@ -719,18 +944,26 @@ func Test_httpResponseBlock_Cache_PayloadBytesError(t *testing.T) {
 	block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{
 		&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
 	}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	respBlock := block.(*httpResponseBlock)
 	// First call to PayloadBytes() consumes the filter reader
 	r, err := respBlock.PayloadBytes()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	_, _ = io.ReadAll(r)
 
 	// Now Cache() should fail because PayloadBytes() returns errContentReAccessed
 	err = respBlock.Cache()
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, errContentReAccessed)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if got, want := err, errContentReAccessed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 type failPayloadSeeker struct {
@@ -751,7 +984,9 @@ func Test_httpResponseBlock_PayloadBytes_SeekError(t *testing.T) {
 	block, _, err := newHttpBlock(&warcRecordOptions{}, &WarcFields{
 		&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
 	}, strings.NewReader(content), blockDigest, pDigest)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	respBlock := block.(*httpResponseBlock)
 	// Replace payload with a failing seeker
@@ -760,13 +995,19 @@ func Test_httpResponseBlock_PayloadBytes_SeekError(t *testing.T) {
 
 	// First PayloadBytes() call creates filter reader
 	r, err := respBlock.PayloadBytes()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	_, _ = io.ReadAll(r)
 
 	// Second call should try to Seek and fail
 	_, err = respBlock.PayloadBytes()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "seek failed")
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if got, want := err.Error(), "seek failed"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_httpResponseBlock_Write_RawBytesError(t *testing.T) {
@@ -785,19 +1026,25 @@ func Test_httpResponseBlock_Write_RawBytesError(t *testing.T) {
 
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrIgnore), WithSyntaxErrorPolicy(ErrIgnore))
 	rec, _, _, err := u.Unmarshal(bufio.NewReader(io.NopCloser(strings.NewReader(rawWARC))))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	defer func() { _ = rec.Close() }()
 
 	block := rec.Block().(PayloadBlock)
 
 	// Consume the payload — since the underlying reader is not seekable, this makes it non-reaccesible
 	r, err := block.PayloadBytes()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	_, _ = io.ReadAll(r)
 
 	// Now RawBytes() should fail because the block is not cached
 	_, err = block.RawBytes()
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func Test_httpRequestBlock_Write_RawBytesError(t *testing.T) {
@@ -815,17 +1062,27 @@ func Test_httpRequestBlock_Write_RawBytesError(t *testing.T) {
 
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrIgnore), WithSyntaxErrorPolicy(ErrIgnore))
 	rec, _, _, err := u.Unmarshal(bufio.NewReader(io.NopCloser(strings.NewReader(rawWARC))))
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
 
 	block := rec.Block().(PayloadBlock)
 
 	// Consume the payload
 	r, err := block.PayloadBytes()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	_, _ = io.ReadAll(r)
 
 	// RawBytes() should fail because the block is not cached
 	_, err = block.RawBytes()
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }

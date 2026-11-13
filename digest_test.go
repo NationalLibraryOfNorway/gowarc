@@ -21,9 +21,6 @@ import (
 	"io"
 	"strings"
 	"testing"
-
-	assert "github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_newDigest(t *testing.T) {
@@ -65,21 +62,30 @@ func Test_newDigest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			d, err := newDigest(tt.algorithm, tt.defaultEncoding)
 
-			assert := assert.New(t)
 			if tt.wantErr {
-				assert.Error(err)
+				if err == nil {
+					t.Errorf("err: expected an error")
+				}
 				return
 			} else {
-				assert.NoError(err)
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
 				if err != nil {
 					return
 				}
 			}
 			_, err = d.Write([]byte(tt.digestString))
-			assert.NoError(err)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
-			assert.Equal(tt.wantDigestName, d.name)
-			assert.Equal(tt.wantDigest, d.format())
+			if got, want := d.name, tt.wantDigestName; got != want {
+				t.Errorf("d.name = %#v, want %#v", got, want)
+			}
+			if got, want := d.format(), tt.wantDigest; got != want {
+				t.Errorf("d.format() = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -126,21 +132,29 @@ func Test_digest_validate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := assert.New(t)
 
 			d, err := newDigest(tt.digestString, unknown)
-			assert.NoError(err)
-			assert.NotNil(d)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if got := d; got == nil {
+				t.Errorf("d = %v, want non-nil", got)
+			}
 
 			_, err = d.Write([]byte(tt.input))
-			assert.NoError(err)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
 			err = d.validate()
 			if !tt.wantValid {
-				assert.Error(err)
+				if err == nil {
+					t.Errorf("err: expected an error")
+				}
 			} else {
-				assert.NoError(err)
-				//assert.Equal(tt.digestString, d.format())
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
 			}
 		})
 	}
@@ -406,10 +420,14 @@ func TestNormalizeAlgorithmName(t *testing.T) {
 
 func TestDigest_UpdateDigest(t *testing.T) {
 	d, err := newDigest("sha1:oldvalue", Base16)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	_, err = d.Write([]byte("test"))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Save old hash
 	oldHash := d.hash
@@ -455,17 +473,23 @@ func TestDigestFilterReader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d1, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			d2, err := newDigest("md5", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			src := strings.NewReader(tt.content)
 			reader := newDigestFilterReader(src, d1, d2)
 
 			// Read all content
 			data, err := io.ReadAll(reader)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			// Verify content is unchanged
 			if string(data) != tt.content {
@@ -486,7 +510,9 @@ func TestDigestFilterReader(t *testing.T) {
 func TestDigestFilterReader_PartialReads(t *testing.T) {
 	content := "hello world test content"
 	d, err := newDigest("sha1", Base16)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	src := strings.NewReader(content)
 	reader := newDigestFilterReader(src, d)
@@ -503,7 +529,9 @@ func TestDigestFilterReader_PartialReads(t *testing.T) {
 		if err == io.EOF {
 			break
 		}
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 
 	// Verify content
@@ -521,10 +549,14 @@ func Test_digest_validate_DecodeError(t *testing.T) {
 	// Create a digest with a Base32 encoding but an invalid Base32 hash string.
 	// This triggers the decode error path in validate().
 	d, err := newDigest("sha1:!!!INVALID_BASE32!!!", Base32)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	_, _ = d.Write([]byte("some data"))
 
 	err = d.validate()
-	assert.Error(t, err, "validate() should return error when decode fails on malformed hash")
+	if err == nil {
+		t.Errorf("err: expected an error: %s", "validate() should return error when decode fails on malformed hash")
+	}
 }

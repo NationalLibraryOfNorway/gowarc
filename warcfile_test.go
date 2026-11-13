@@ -18,18 +18,18 @@ package gowarc
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -219,28 +219,48 @@ func TestWarcFileWriter_write_cases(t *testing.T) {
 				}
 
 				res := w.Write(recs...)
-				require.Len(t, res, st.nRecords)
+				if got, want := len(res), st.nRecords; got != want {
+					t.Fatalf("len(res) = %v, want %v", got, want)
+				}
 
 				// If crossref case, validate headers were mutated.
 				if tt.checkCrossRef {
-					require.Len(t, recs, 3)
+					if got, want := len(recs), 3; got != want {
+						t.Fatalf("len(recs) = %v, want %v", got, want)
+					}
 					rec1, rec2, rec3 := recs[0], recs[1], recs[2]
-					require.NotContains(t, rec1.WarcHeader().GetAll(WarcConcurrentTo), rec1.WarcHeader().Get(WarcRecordID))
-					require.Contains(t, rec1.WarcHeader().GetAll(WarcConcurrentTo), rec2.WarcHeader().Get(WarcRecordID))
-					require.Contains(t, rec1.WarcHeader().GetAll(WarcConcurrentTo), rec3.WarcHeader().Get(WarcRecordID))
+					if got, want := rec1.WarcHeader().GetAll(WarcConcurrentTo), rec1.WarcHeader().Get(WarcRecordID); slices.Contains(got, want) {
+						t.Fatalf("rec1.WarcHeader().GetAll(WarcConcurrentTo) = %v, must not contain %v", got, want)
+					}
+					if got, want := rec1.WarcHeader().GetAll(WarcConcurrentTo), rec2.WarcHeader().Get(WarcRecordID); !slices.Contains(got, want) {
+						t.Fatalf("rec1.WarcHeader().GetAll(WarcConcurrentTo) = %v, want to contain %v", got, want)
+					}
+					if got, want := rec1.WarcHeader().GetAll(WarcConcurrentTo), rec3.WarcHeader().Get(WarcRecordID); !slices.Contains(got, want) {
+						t.Fatalf("rec1.WarcHeader().GetAll(WarcConcurrentTo) = %v, want to contain %v", got, want)
+					}
 				}
 
 				for i := range res {
-					require.NoError(t, res[i].Err)
+					if err := res[i].Err; err != nil {
+						t.Fatalf("res[i].Err error = %v", err)
+					}
 
-					require.Regexp(t, st.wantFileRegex, res[i].FileName)
-					require.Equal(t, st.wantBytes[i], res[i].BytesWritten)
+					if got, pattern := res[i].FileName, st.wantFileRegex; !regexp.MustCompile(pattern).MatchString(got) {
+						t.Fatalf("value %q does not match %q", got, pattern)
+					}
+					if got, want := res[i].BytesWritten, st.wantBytes[i]; got != want {
+						t.Fatalf("res[i].BytesWritten = %#v, want %#v", got, want)
+					}
 
 					if !tt.compress {
-						require.Equal(t, st.wantOffsets[i], res[i].FileOffset)
+						if got, want := res[i].FileOffset, st.wantOffsets[i]; got != want {
+							t.Fatalf("res[i].FileOffset = %#v, want %#v", got, want)
+						}
 					} else {
 						// For compressed, offsets must equal file size before the record is appended.
-						require.Equal(t, lastOpenSize, res[i].FileOffset)
+						if got, want := res[i].FileOffset, lastOpenSize; got != want {
+							t.Fatalf("res[i].FileOffset = %#v, want %#v", got, want)
+						}
 						// After each record, update lastOpenSize to current .open file size for next record.
 						lastOpenSize = openFileSize(t, dir)
 					}
@@ -248,12 +268,18 @@ func TestWarcFileWriter_write_cases(t *testing.T) {
 			}
 
 			// Before rotate: should have .open file
-			require.NotEmpty(t, listFiles(t, dir, `\.open$`))
+			if got := listFiles(t, dir, `\.open$`); len(got) == 0 {
+				t.Fatalf("listFiles(t, dir, `\\.open$`) = %v, want nonempty", got)
+			}
 
-			require.NoError(t, w.Rotate())
+			if err := w.Rotate(); err != nil {
+				t.Fatalf("w.Rotate() error = %v", err)
+			}
 
 			// After rotate: no .open files
-			require.Empty(t, listFiles(t, dir, `\.open$`))
+			if got := listFiles(t, dir, `\.open$`); len(got) != 0 {
+				t.Fatalf("listFiles(t, dir, `\\.open$`) = %v, want empty", got)
+			}
 		})
 	}
 }
@@ -349,9 +375,15 @@ func TestWarcFileWriter_files_parallel_and_rotation(t *testing.T) {
 
 			writeOne := func() {
 				res := w.Write(createTestRecord())
-				require.Len(t, res, 1)
-				require.NoError(t, res[0].Err)
-				require.Equal(t, uncompressedRecordSize, res[0].BytesWritten)
+				if got, want := len(res), 1; got != want {
+					t.Fatalf("len(res) = %v, want %v", got, want)
+				}
+				if err := res[0].Err; err != nil {
+					t.Fatalf("res[0].Err error = %v", err)
+				}
+				if got, want := res[0].BytesWritten, uncompressedRecordSize; got != want {
+					t.Fatalf("res[0].BytesWritten = %#v, want %#v", got, want)
+				}
 			}
 
 			if tt.parallel {
@@ -367,20 +399,34 @@ func TestWarcFileWriter_files_parallel_and_rotation(t *testing.T) {
 				}
 			}
 
-			require.NotEmpty(t, listFiles(t, dir, `\.open$`))
-			require.NoError(t, w.Rotate())
-			require.Empty(t, listFiles(t, dir, `\.open$`))
+			if got := listFiles(t, dir, `\.open$`); len(got) == 0 {
+				t.Fatalf("listFiles(t, dir, `\\.open$`) = %v, want nonempty", got)
+			}
+			if err := w.Rotate(); err != nil {
+				t.Fatalf("w.Rotate() error = %v", err)
+			}
+			if got := listFiles(t, dir, `\.open$`); len(got) != 0 {
+				t.Fatalf("listFiles(t, dir, `\\.open$`) = %v, want empty", got)
+			}
 
 			closed := listFiles(t, dir, `\.warc(\.gz)?$`)
-			require.GreaterOrEqual(t, len(closed), tt.wantClosedMin)
-			require.LessOrEqual(t, len(closed), tt.wantClosedMax)
+			if got, bound := len(closed), tt.wantClosedMin; got < bound {
+				t.Fatalf("len(closed) = %v, want >= %v", got, bound)
+			}
+			if got, bound := len(closed), tt.wantClosedMax; got > bound {
+				t.Fatalf("len(closed) = %v, want <= %v", got, bound)
+			}
 
 			for _, wf := range tt.wantFiles {
 				total := sumSizesMatching(t, dir, wf.pattern)
 				if wf.size != nil {
-					require.Equal(t, *wf.size, total)
+					if got, want := total, *wf.size; got != want {
+						t.Fatalf("total = %#v, want %#v", got, want)
+					}
 				} else {
-					require.Greater(t, total, int64(0))
+					if got, bound := total, int64(0); got <= bound {
+						t.Fatalf("total = %v, want > %v", got, bound)
+					}
 				}
 			}
 		})
@@ -406,8 +452,12 @@ func TestDefaultNameGenerator_NewWarcfileName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			for i := 0; i < tt.invocations; i++ {
 				gotDir, gotName := tt.generator.NewWarcfileName()
-				require.Regexp(t, tt.wantDir, gotDir)
-				require.Regexp(t, tt.wantMatch, gotName)
+				if got, pattern := gotDir, tt.wantDir; !regexp.MustCompile(pattern).MatchString(got) {
+					t.Fatalf("value %q does not match %q", got, pattern)
+				}
+				if got, pattern := gotName, tt.wantMatch; !regexp.MustCompile(pattern).MatchString(got) {
+					t.Fatalf("value %q does not match %q", got, pattern)
+				}
 			}
 		})
 	}
@@ -430,51 +480,93 @@ func TestWarcFileReader(t *testing.T) {
 		WithMaxConcurrentWriters(1),
 	)
 	res := w.Write(createTestRecord())
-	require.Len(t, res, 1)
-	require.NoError(t, res[0].Err)
-	require.NoError(t, w.Close())
+	if got, want := len(res), 1; got != want {
+		t.Fatalf("len(res) = %v, want %v", got, want)
+	}
+	if err := res[0].Err; err != nil {
+		t.Fatalf("res[0].Err error = %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("w.Close() error = %v", err)
+	}
 
 	// Find the created file
 	files := listFiles(t, dir, `\.warc$`)
-	require.Len(t, files, 1)
+	if got, want := len(files), 1; got != want {
+		t.Fatalf("len(files) = %v, want %v", got, want)
+	}
 	filePath := filepath.Join(dir, files[0])
 
 	t.Run("read back records", func(t *testing.T) {
 		reader, err := NewWarcFileReader(filePath, 0)
-		require.NoError(t, err)
-		defer func() { assert.NoError(t, reader.Close()) }()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		defer func() {
+			if err := reader.Close(); err != nil {
+				t.Errorf("reader.Close() error = %v", err)
+			}
+		}()
 
 		rec, err := reader.Next()
-		require.NoError(t, err)
-		require.NotNil(t, rec.WarcRecord)
-		assert.Equal(t, int64(0), rec.Offset)
-		assert.Greater(t, rec.Size, int64(0))
-		assert.Empty(t, rec.Validation)
-		assert.Equal(t, Response, rec.WarcRecord.Type())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := rec.WarcRecord; got == nil {
+			t.Fatalf("rec.WarcRecord = %v, want non-nil", got)
+		}
+		if got, want := rec.Offset, int64(0); got != want {
+			t.Errorf("rec.Offset = %#v, want %#v", got, want)
+		}
+		if got, bound := rec.Size, int64(0); got <= bound {
+			t.Errorf("rec.Size = %v, want > %v", got, bound)
+		}
+		if got := rec.Validation; len(got) != 0 {
+			t.Errorf("rec.Validation = %v, want empty", got)
+		}
+		if got, want := rec.WarcRecord.Type(), Response; got != want {
+			t.Errorf("rec.WarcRecord.Type() = %#v, want %#v", got, want)
+		}
 
 		// EOF
 		_, err = reader.Next()
-		assert.ErrorIs(t, err, io.EOF)
+		if got, want := err, io.EOF; !errors.Is(got, want) {
+			t.Errorf("err = %v, want an error matching %v", got, want)
+		}
 	})
 
 	t.Run("read with offset", func(t *testing.T) {
 		reader, err := NewWarcFileReader(filePath, 999999)
-		require.NoError(t, err)
-		defer func() { assert.NoError(t, reader.Close()) }()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		defer func() {
+			if err := reader.Close(); err != nil {
+				t.Errorf("reader.Close() error = %v", err)
+			}
+		}()
 
 		_, err = reader.Next()
-		assert.Error(t, err)
+		if err == nil {
+			t.Errorf("err: expected an error")
+		}
 	})
 
 	t.Run("directory error", func(t *testing.T) {
 		_, err := NewWarcFileReader(dir, 0)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "is directory")
+		if err == nil {
+			t.Errorf("err: expected an error")
+		}
+		if got, want := err.Error(), "is directory"; !strings.Contains(got, want) {
+			t.Errorf("err.Error() = %v, want to contain %v", got, want)
+		}
 	})
 
 	t.Run("nonexistent file", func(t *testing.T) {
 		_, err := NewWarcFileReader(filepath.Join(dir, "no-such-file.warc"), 0)
-		assert.Error(t, err)
+		if err == nil {
+			t.Errorf("err: expected an error")
+		}
 	})
 }
 
@@ -495,44 +587,80 @@ func TestNewWarcFileReaderFromStream(t *testing.T) {
 		WithMaxConcurrentWriters(1),
 	)
 	res := w.Write(createTestRecord())
-	require.Len(t, res, 1)
-	require.NoError(t, res[0].Err)
-	require.NoError(t, w.Close())
+	if got, want := len(res), 1; got != want {
+		t.Fatalf("len(res) = %v, want %v", got, want)
+	}
+	if err := res[0].Err; err != nil {
+		t.Fatalf("res[0].Err error = %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("w.Close() error = %v", err)
+	}
 
 	files := listFiles(t, dir, `\.warc$`)
-	require.Len(t, files, 1)
+	if got, want := len(files), 1; got != want {
+		t.Fatalf("len(files) = %v, want %v", got, want)
+	}
 	filePath := filepath.Join(dir, files[0])
 
 	t.Run("from opened file", func(t *testing.T) {
 		f, err := os.Open(filePath)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		// already closed by reader.Close(), so expect error
-		defer func() { assert.Error(t, f.Close()) }()
+		defer func() {
+			if err := f.Close(); err == nil {
+				t.Errorf("f.Close(): expected an error")
+			}
+		}()
 
 		reader, err := NewWarcFileReaderFromStream(f, 0)
-		require.NoError(t, err)
-		defer func() { assert.NoError(t, reader.Close()) }()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		defer func() {
+			if err := reader.Close(); err != nil {
+				t.Errorf("reader.Close() error = %v", err)
+			}
+		}()
 
 		rec, err := reader.Next()
-		require.NoError(t, err)
-		require.NotNil(t, rec.WarcRecord)
-		assert.Equal(t, Response, rec.WarcRecord.Type())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := rec.WarcRecord; got == nil {
+			t.Fatalf("rec.WarcRecord = %v, want non-nil", got)
+		}
+		if got, want := rec.WarcRecord.Type(), Response; got != want {
+			t.Errorf("rec.WarcRecord.Type() = %#v, want %#v", got, want)
+		}
 	})
 
 	t.Run("from stream non-closer", func(t *testing.T) {
 		data, err := os.ReadFile(filePath)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		reader, err := NewWarcFileReaderFromStream(bytes.NewReader(data), 0)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		rec, err := reader.Next()
-		require.NoError(t, err)
-		require.NotNil(t, rec.WarcRecord)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := rec.WarcRecord; got == nil {
+			t.Fatalf("rec.WarcRecord = %v, want non-nil", got)
+		}
 
 		// Close when underlying is not an io.Closer
 		err = reader.Close()
-		assert.NoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	})
 }
 
@@ -544,13 +672,25 @@ func TestWarcFileWriter_String(t *testing.T) {
 		WithMaxFileSize(1024),
 		WithMaxConcurrentWriters(2),
 	)
-	defer func() { assert.NoError(t, w.Close()) }()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Errorf("w.Close() error = %v", err)
+		}
+	}()
 
 	s := w.String()
-	assert.Contains(t, s, "WarcFileWriter")
-	assert.Contains(t, s, "1024")
-	assert.Contains(t, s, "true")
-	assert.Contains(t, s, "2")
+	if got, want := s, "WarcFileWriter"; !strings.Contains(got, want) {
+		t.Errorf("s = %v, want to contain %v", got, want)
+	}
+	if got, want := s, "1024"; !strings.Contains(got, want) {
+		t.Errorf("s = %v, want to contain %v", got, want)
+	}
+	if got, want := s, "true"; !strings.Contains(got, want) {
+		t.Errorf("s = %v, want to contain %v", got, want)
+	}
+	if got, want := s, "2"; !strings.Contains(got, want) {
+		t.Errorf("s = %v, want to contain %v", got, want)
+	}
 }
 
 func TestWarcFileWriter_WriteAfterClose(t *testing.T) {
@@ -564,11 +704,15 @@ func TestWarcFileWriter_WriteAfterClose(t *testing.T) {
 		WithMaxFileSize(0),
 		WithMaxConcurrentWriters(1),
 	)
-	require.NoError(t, w.Close())
+	if err := w.Close(); err != nil {
+		t.Fatalf("w.Close() error = %v", err)
+	}
 
 	// Write after close should return nil
 	res := w.Write(createTestRecord())
-	assert.Nil(t, res)
+	if got := res; got != nil {
+		t.Errorf("res = %v, want nil", got)
+	}
 }
 
 func TestWarcFileWriter_RotateAfterClose(t *testing.T) {
@@ -582,11 +726,17 @@ func TestWarcFileWriter_RotateAfterClose(t *testing.T) {
 		WithMaxFileSize(0),
 		WithMaxConcurrentWriters(1),
 	)
-	require.NoError(t, w.Close())
+	if err := w.Close(); err != nil {
+		t.Fatalf("w.Close() error = %v", err)
+	}
 
 	err := w.Rotate()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "closed")
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if got, want := err.Error(), "closed"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestWarcFileWriterOptions(t *testing.T) {
@@ -594,49 +744,69 @@ func TestWarcFileWriterOptions(t *testing.T) {
 	t.Run("WithCompressionLevel", func(t *testing.T) {
 		o := defaultwarcFileWriterOptions()
 		WithCompressionLevel(9).apply(&o)
-		assert.Equal(t, 9, o.gzipLevel)
+		if got, want := o.gzipLevel, 9; got != want {
+			t.Errorf("o.gzipLevel = %#v, want %#v", got, want)
+		}
 	})
 	t.Run("WithFlush", func(t *testing.T) {
 		o := defaultwarcFileWriterOptions()
 		WithFlush(true).apply(&o)
-		assert.True(t, o.flush)
+		if got := o.flush; !got {
+			t.Errorf("o.flush = %v, want true", got)
+		}
 	})
 	t.Run("WithSegmentation", func(t *testing.T) {
 		o := defaultwarcFileWriterOptions()
 		WithSegmentation().apply(&o)
-		assert.True(t, o.useSegmentation)
+		if got := o.useSegmentation; !got {
+			t.Errorf("o.useSegmentation = %v, want true", got)
+		}
 	})
 	t.Run("WithCompressedFileSuffix", func(t *testing.T) {
 		o := defaultwarcFileWriterOptions()
 		WithCompressedFileSuffix(".zst").apply(&o)
-		assert.Equal(t, ".zst", o.compressSuffix)
+		if got, want := o.compressSuffix, ".zst"; got != want {
+			t.Errorf("o.compressSuffix = %#v, want %#v", got, want)
+		}
 	})
 	t.Run("WithOpenFileSuffix", func(t *testing.T) {
 		o := defaultwarcFileWriterOptions()
 		WithOpenFileSuffix(".tmp").apply(&o)
-		assert.Equal(t, ".tmp", o.openFileSuffix)
+		if got, want := o.openFileSuffix, ".tmp"; got != want {
+			t.Errorf("o.openFileSuffix = %#v, want %#v", got, want)
+		}
 	})
 	t.Run("WithMarshaler", func(t *testing.T) {
 		o := defaultwarcFileWriterOptions()
 		m := &defaultMarshaler{}
 		WithMarshaler(m).apply(&o)
-		assert.Same(t, m, o.marshaler)
+		if got, want := o.marshaler, m; got != want {
+			t.Errorf("pointer identity: got %p, compared with %p", got, want)
+		}
 	})
 	t.Run("WithBeforeFileCreationHook", func(t *testing.T) {
 		o := defaultwarcFileWriterOptions()
 		called := false
 		WithBeforeFileCreationHook(func(string) error { called = true; return nil }).apply(&o)
-		require.NotNil(t, o.beforeFileCreationHook)
+		if got := o.beforeFileCreationHook; got == nil {
+			t.Fatal("o.beforeFileCreationHook is nil")
+		}
 		_ = o.beforeFileCreationHook("test")
-		assert.True(t, called)
+		if got := called; !got {
+			t.Errorf("called = %v, want true", got)
+		}
 	})
 	t.Run("WithAfterFileCreationHook", func(t *testing.T) {
 		o := defaultwarcFileWriterOptions()
 		called := false
 		WithAfterFileCreationHook(func(string, int64, string) error { called = true; return nil }).apply(&o)
-		require.NotNil(t, o.afterFileCreationHook)
+		if got := o.afterFileCreationHook; got == nil {
+			t.Fatal("o.afterFileCreationHook is nil")
+		}
 		_ = o.afterFileCreationHook("test", 0, "")
-		assert.True(t, called)
+		if got := called; !got {
+			t.Errorf("called = %v, want true", got)
+		}
 	})
 }
 
@@ -652,10 +822,16 @@ func TestWarcFileWriter_WithSegmentation(t *testing.T) {
 		WithSegmentation(),
 		WithMaxConcurrentWriters(1),
 	)
-	defer func() { assert.NoError(t, w.Close()) }()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Errorf("w.Close() error = %v", err)
+		}
+	}()
 
 	res := w.Write(createTestRecord())
-	require.Len(t, res, 1)
+	if got, want := len(res), 1; got != want {
+		t.Fatalf("len(res) = %v, want %v", got, want)
+	}
 	// Exercised maxRecordSize with segmentation=true, compress=false
 }
 
@@ -671,11 +847,19 @@ func TestWarcFileWriter_WithFlushEnabled(t *testing.T) {
 		WithFlush(true),
 		WithMaxConcurrentWriters(1),
 	)
-	defer func() { assert.NoError(t, w.Close()) }()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Errorf("w.Close() error = %v", err)
+		}
+	}()
 
 	res := w.Write(createTestRecord())
-	require.Len(t, res, 1)
-	require.NoError(t, res[0].Err)
+	if got, want := len(res), 1; got != want {
+		t.Fatalf("len(res) = %v, want %v", got, want)
+	}
+	if err := res[0].Err; err != nil {
+		t.Fatalf("res[0].Err error = %v", err)
+	}
 }
 
 func TestWarcFileWriter_HooksAreCalled(t *testing.T) {
@@ -698,15 +882,29 @@ func TestWarcFileWriter_HooksAreCalled(t *testing.T) {
 	)
 
 	res := w.Write(createTestRecord())
-	require.Len(t, res, 1)
-	require.NoError(t, res[0].Err)
+	if got, want := len(res), 1; got != want {
+		t.Fatalf("len(res) = %v, want %v", got, want)
+	}
+	if err := res[0].Err; err != nil {
+		t.Fatalf("res[0].Err error = %v", err)
+	}
 
-	assert.NotEmpty(t, beforeFile)
-	assert.Contains(t, beforeFile, ".open")
+	if got := beforeFile; len(got) == 0 {
+		t.Errorf("beforeFile = %v, want nonempty", got)
+	}
+	if got, want := beforeFile, ".open"; !strings.Contains(got, want) {
+		t.Errorf("beforeFile = %v, want to contain %v", got, want)
+	}
 
-	require.NoError(t, w.Rotate())
-	assert.NotEmpty(t, afterFile)
-	assert.Greater(t, afterSize, int64(0))
+	if err := w.Rotate(); err != nil {
+		t.Fatalf("w.Rotate() error = %v", err)
+	}
+	if got := afterFile; len(got) == 0 {
+		t.Errorf("afterFile = %v, want nonempty", got)
+	}
+	if got, bound := afterSize, int64(0); got <= bound {
+		t.Errorf("afterSize = %v, want > %v", got, bound)
+	}
 }
 
 func TestPatternNameGenerator_CustomParams(t *testing.T) {
@@ -720,15 +918,28 @@ func TestPatternNameGenerator_CustomParams(t *testing.T) {
 		Params:    map[string]any{"custom": "myvalue"},
 	}
 	dir, name := ng.NewWarcfileName()
-	assert.Equal(t, "mydir", dir)
-	assert.Contains(t, name, "myvalue")
-	assert.Contains(t, name, "pre-")
+	if got, want := dir, "mydir"; got != want {
+		t.Errorf("dir = %#v, want %#v", got, want)
+	}
+	if got, want := name, "myvalue"; !strings.Contains(got, want) {
+		t.Errorf("name = %v, want to contain %v", got, want)
+	}
+	if got, want := name, "pre-"; !strings.Contains(got, want) {
+		t.Errorf("name = %v, want to contain %v", got, want)
+	}
 }
 
 func TestNewWarcFileWriter_PanicOnInvalidGzipLevel(t *testing.T) {
-	assert.Panics(t, func() {
-		NewWarcFileWriter(WithCompressionLevel(42))
-	})
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		(func() {
+			NewWarcFileWriter(WithCompressionLevel(42))
+		})()
+	}()
 }
 
 func TestNewWarcFileWriter_InvalidCompressionRatio(t *testing.T) {
@@ -739,7 +950,11 @@ func TestNewWarcFileWriter_InvalidCompressionRatio(t *testing.T) {
 		WithExpectedCompressionRatio(-1),
 		WithMaxConcurrentWriters(1),
 	)
-	defer func() { assert.NoError(t, w.Close()) }()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Errorf("w.Close() error = %v", err)
+		}
+	}()
 }
 
 var warcFileWriterBenchmarkResult []WriteResponse
@@ -752,8 +967,6 @@ func BenchmarkWarcFileWriter_Write_compressed(b *testing.B) {
 	hostOrIp = func() string {
 		return "example"
 	}
-
-	assert := assert.New(b)
 
 	nameGenerator := &PatternNameGenerator{
 		Prefix:    "bench-",
@@ -769,7 +982,11 @@ func BenchmarkWarcFileWriter_Write_compressed(b *testing.B) {
 		WithFileNameGenerator(nameGenerator),
 		WithMaxFileSize(1<<30),
 		WithMaxConcurrentWriters(1))
-	defer func() { assert.NoError(w.Close()) }()
+	defer func() {
+		if err := w.Close(); err != nil {
+			b.Errorf("w.Close() error = %v", err)
+		}
+	}()
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -799,7 +1016,9 @@ func listFiles(t *testing.T, dir string, pattern string) []string {
 	re := regexp.MustCompile(pattern)
 
 	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	var out []string
 	for _, e := range entries {
@@ -821,7 +1040,9 @@ func openFileSize(t *testing.T, dir string) int64 {
 		return 0
 	}
 	fi, err := os.Stat(filepath.Join(dir, opens[0]))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	return fi.Size()
 }
 
@@ -830,7 +1051,9 @@ func sumSizesMatching(t *testing.T, dir, fileNameRegex string) int64 {
 	re := regexp.MustCompile(fileNameRegex)
 
 	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	var total int64
 	var matched bool
@@ -843,10 +1066,14 @@ func sumSizesMatching(t *testing.T, dir, fileNameRegex string) int64 {
 		}
 		matched = true
 		fi, err := e.Info()
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		total += fi.Size()
 	}
-	require.True(t, matched, "no file matching %q in %q", fileNameRegex, dir)
+	if got := matched; !got {
+		t.Fatalf("matched = %v, want true: %s", got, fmt.Sprintf("no file matching %q in %q", fileNameRegex, dir))
+	}
 	return total
 }
 
@@ -879,16 +1106,30 @@ func TestWarcFileWriter_WarcInfoFunc_Error(t *testing.T) {
 			return fmt.Errorf("warcinfo callback failed")
 		}),
 	)
-	defer func() { assert.NoError(t, w.Close()) }()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Errorf("w.Close() error = %v", err)
+		}
+	}()
 
 	rec := createTestRecord()
-	defer func() { assert.NoError(t, rec.Close()) }()
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
 
 	// Write should fail because warcInfoFunc fails during file creation
 	responses := w.Write(rec)
-	require.Len(t, responses, 1)
-	assert.Error(t, responses[0].Err)
-	assert.Contains(t, responses[0].Err.Error(), "warcinfo callback failed")
+	if got, want := len(responses), 1; got != want {
+		t.Fatalf("len(responses) = %v, want %v", got, want)
+	}
+	if err := responses[0].Err; err == nil {
+		t.Errorf("responses[0].Err: expected an error")
+	}
+	if got, want := responses[0].Err.Error(), "warcinfo callback failed"; !strings.Contains(got, want) {
+		t.Errorf("responses[0].Err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestWarcFileWriter_MaxFileSize_ContentLengthMissing(t *testing.T) {
@@ -899,7 +1140,11 @@ func TestWarcFileWriter_MaxFileSize_ContentLengthMissing(t *testing.T) {
 		WithMaxFileSize(100000), // large enough that first write succeeds
 		WithFileNameGenerator(&PatternNameGenerator{Prefix: "test-", Directory: dir}),
 	)
-	defer func() { assert.NoError(t, w.Close()) }()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Errorf("w.Close() error = %v", err)
+		}
+	}()
 
 	// Build a record without Content-Length header
 	rb := NewRecordBuilder(Warcinfo,
@@ -910,12 +1155,22 @@ func TestWarcFileWriter_MaxFileSize_ContentLengthMissing(t *testing.T) {
 	rb.AddWarcHeader(ContentType, "application/warc-fields")
 	// Deliberately NOT setting Content-Length
 	rec, _, err := rb.Build()
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
 
 	responses := w.Write(rec)
-	require.Len(t, responses, 1)
-	assert.NoError(t, responses[0].Err)
+	if got, want := len(responses), 1; got != want {
+		t.Fatalf("len(responses) = %v, want %v", got, want)
+	}
+	if err := responses[0].Err; err != nil {
+		t.Errorf("responses[0].Err error = %v", err)
+	}
 }
 
 func TestWarcFileWriter_MaxFileSize_Rotate(t *testing.T) {
@@ -928,19 +1183,33 @@ func TestWarcFileWriter_MaxFileSize_Rotate(t *testing.T) {
 
 	rec1 := createTestRecord()
 	defer func() {
-		require.NoError(t, rec1.Close(), "failed to close rec1")
+		if err := rec1.Close(); err != nil {
+			t.Fatalf("rec1.Close() error = %v: %s", err, "failed to close rec1")
+		}
 	}()
 	responses := w.Write(rec1)
-	require.Len(t, responses, 1)
-	require.NoError(t, responses[0].Err)
+	if got, want := len(responses), 1; got != want {
+		t.Fatalf("len(responses) = %v, want %v", got, want)
+	}
+	if err := responses[0].Err; err != nil {
+		t.Fatalf("responses[0].Err error = %v", err)
+	}
 
 	rec2 := createTestRecord()
 	defer func() {
-		require.NoError(t, rec2.Close(), "failed to close rec2")
+		if err := rec2.Close(); err != nil {
+			t.Fatalf("rec2.Close() error = %v: %s", err, "failed to close rec2")
+		}
 	}()
 	responses = w.Write(rec2)
-	require.Len(t, responses, 1)
-	require.NoError(t, responses[0].Err)
+	if got, want := len(responses), 1; got != want {
+		t.Fatalf("len(responses) = %v, want %v", got, want)
+	}
+	if err := responses[0].Err; err != nil {
+		t.Fatalf("responses[0].Err error = %v", err)
+	}
 
-	require.NoError(t, w.Close())
+	if err := w.Close(); err != nil {
+		t.Fatalf("w.Close() error = %v", err)
+	}
 }

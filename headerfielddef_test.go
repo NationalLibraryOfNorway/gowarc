@@ -19,10 +19,8 @@ package gowarc
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestValidateHeader(t *testing.T) {
@@ -196,8 +194,12 @@ func TestValidateHeader_DuplicateField_ErrFail(t *testing.T) {
 	}
 	opts := newOptions(WithSpecViolationPolicy(ErrFail))
 	_, _, err := validateHeader(header, V1_1, opts)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field occurs more than once")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "field occurs more than once"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestValidateHeader_DuplicateField_ErrWarn(t *testing.T) {
@@ -211,9 +213,15 @@ func TestValidateHeader_DuplicateField_ErrWarn(t *testing.T) {
 	}
 	opts := newOptions(WithSpecViolationPolicy(ErrWarn))
 	_, validation, err := validateHeader(header, V1_1, opts)
-	require.NoError(t, err)
-	assert.NotEmpty(t, validation)
-	assert.Contains(t, fmt.Sprint(validation), "field occurs more than once")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := validation; len(got) == 0 {
+		t.Errorf("validation = %v, want nonempty", got)
+	}
+	if got, want := fmt.Sprint(validation), "field occurs more than once"; !strings.Contains(got, want) {
+		t.Errorf("fmt.Sprint(validation) = %v, want to contain %v", got, want)
+	}
 }
 
 func TestValidateHeader_IllegalConcurrentTo_Warcinfo_ErrFail(t *testing.T) {
@@ -227,8 +235,12 @@ func TestValidateHeader_IllegalConcurrentTo_Warcinfo_ErrFail(t *testing.T) {
 	}
 	opts := newOptions(WithSpecViolationPolicy(ErrFail))
 	_, _, err := validateHeader(header, V1_1, opts)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "illegal field")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "illegal field"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestValidateHeader_IllegalConcurrentTo_Warcinfo_ErrWarn(t *testing.T) {
@@ -242,8 +254,12 @@ func TestValidateHeader_IllegalConcurrentTo_Warcinfo_ErrWarn(t *testing.T) {
 	}
 	opts := newOptions(WithSpecViolationPolicy(ErrWarn))
 	_, validation, err := validateHeader(header, V1_1, opts)
-	require.NoError(t, err)
-	assert.NotEmpty(t, validation)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := validation; len(got) == 0 {
+		t.Errorf("validation = %v, want nonempty", got)
+	}
 }
 
 func TestValidateHeader_MissingRequiredField_ErrWarn(t *testing.T) {
@@ -253,9 +269,15 @@ func TestValidateHeader_MissingRequiredField_ErrWarn(t *testing.T) {
 	}
 	opts := newOptions(WithSpecViolationPolicy(ErrWarn))
 	_, validation, err := validateHeader(header, V1_1, opts)
-	require.NoError(t, err)
-	assert.NotEmpty(t, validation)
-	assert.Contains(t, fmt.Sprint(validation), "missing required field")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := validation; len(got) == 0 {
+		t.Errorf("validation = %v, want nonempty", got)
+	}
+	if got, want := fmt.Sprint(validation), "missing required field"; !strings.Contains(got, want) {
+		t.Errorf("fmt.Sprint(validation) = %v, want to contain %v", got, want)
+	}
 }
 
 func TestValidateHeader_MissingContentType_ErrWarn(t *testing.T) {
@@ -267,9 +289,15 @@ func TestValidateHeader_MissingContentType_ErrWarn(t *testing.T) {
 	}
 	opts := newOptions(WithSpecViolationPolicy(ErrWarn))
 	_, validation, err := validateHeader(header, V1_1, opts)
-	require.NoError(t, err)
-	assert.NotEmpty(t, validation)
-	assert.Contains(t, fmt.Sprint(validation), "missing required field: Content-Type")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := validation; len(got) == 0 {
+		t.Errorf("validation = %v, want nonempty", got)
+	}
+	if got, want := fmt.Sprint(validation), "missing required field: Content-Type"; !strings.Contains(got, want) {
+		t.Errorf("fmt.Sprint(validation) = %v, want to contain %v", got, want)
+	}
 }
 
 func TestResolveRecordType_UnknownType_ErrWarn(t *testing.T) {
@@ -278,9 +306,15 @@ func TestResolveRecordType_UnknownType_ErrWarn(t *testing.T) {
 	}
 	opts := newOptions(WithUnknownRecordTypePolicy(ErrWarn))
 	rt, validation, err := resolveRecordType(header, opts)
-	require.NoError(t, err)
-	assert.Equal(t, RecordType(0), rt)
-	assert.NotEmpty(t, validation)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := rt, RecordType(0); got != want {
+		t.Errorf("rt = %#v, want %#v", got, want)
+	}
+	if got := validation; len(got) == 0 {
+		t.Errorf("validation = %v, want nonempty", got)
+	}
 }
 
 func TestResolveRecordType_UnknownType_ErrFail(t *testing.T) {
@@ -289,8 +323,12 @@ func TestResolveRecordType_UnknownType_ErrFail(t *testing.T) {
 	}
 	opts := newOptions(WithUnknownRecordTypePolicy(ErrFail))
 	_, _, err := resolveRecordType(header, opts)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unrecognized value")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "unrecognized value"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestResolveRecordType_MissingType_ErrWarn(t *testing.T) {
@@ -299,8 +337,12 @@ func TestResolveRecordType_MissingType_ErrWarn(t *testing.T) {
 	}
 	opts := newOptions(WithSpecViolationPolicy(ErrWarn))
 	_, validation, err := resolveRecordType(header, opts)
-	require.NoError(t, err)
-	assert.NotEmpty(t, validation)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := validation; len(got) == 0 {
+		t.Errorf("validation = %v, want nonempty", got)
+	}
 }
 
 func TestResolveRecordType_MissingType_ErrIgnore(t *testing.T) {
@@ -309,16 +351,26 @@ func TestResolveRecordType_MissingType_ErrIgnore(t *testing.T) {
 	}
 	opts := newOptions(WithSpecViolationPolicy(ErrIgnore), WithUnknownRecordTypePolicy(ErrIgnore))
 	rt, validation, err := resolveRecordType(header, opts)
-	require.NoError(t, err)
-	assert.Equal(t, RecordType(0), rt)
-	assert.Empty(t, validation)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := rt, RecordType(0); got != want {
+		t.Errorf("rt = %#v, want %#v", got, want)
+	}
+	if got := validation; len(got) != 0 {
+		t.Errorf("validation = %v, want empty", got)
+	}
 }
 
 func TestCheckLegal_UnknownRecordType(t *testing.T) {
 	opts := newOptions(WithSpecViolationPolicy(ErrFail))
 	shouldValidate, err := checkLegal(opts, WarcDate, V1_1, 0, lcHdrNameToDef["warc-date"])
-	require.NoError(t, err)
-	assert.False(t, shouldValidate) // unknown record types skip validation
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := shouldValidate; got {
+		t.Errorf("shouldValidate = %v, want false", got)
+	} // unknown record types skip validation
 }
 
 func TestCheckLegal_FieldNotInSpec(t *testing.T) {
@@ -326,6 +378,10 @@ func TestCheckLegal_FieldNotInSpec(t *testing.T) {
 	// WarcRefersToDate is only in V1_1 not V1_0
 	def := lcHdrNameToDef["warc-refers-to-date"]
 	shouldValidate, err := checkLegal(opts, WarcRefersToDate, V1_0, Revisit, def)
-	require.NoError(t, err)
-	assert.False(t, shouldValidate)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := shouldValidate; got {
+		t.Errorf("shouldValidate = %v, want false", got)
+	}
 }

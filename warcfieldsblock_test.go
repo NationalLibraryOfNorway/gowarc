@@ -24,8 +24,6 @@ import (
 	"testing/iotest"
 
 	"github.com/nationallibraryofnorway/gowarc/v3/internal/diskbuffer"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_warcfieldsBlock_BlockDigest(t *testing.T) {
@@ -49,12 +47,18 @@ func Test_warcfieldsBlock_BlockDigest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			o := defaultWarcRecordOptions()
 			block, validation, err := newWarcFieldsBlock(&o, &WarcFields{}, tt.data, d)
-			require.NoError(t, err)
-			require.Empty(t, validation)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := validation; len(got) != 0 {
+				t.Fatalf("validation = %v, want empty", got)
+			}
 
 			validateBlockDigestTest(t, block, digest)
 		})
@@ -90,15 +94,23 @@ func Test_warcfieldsBlock_Cache(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			o := defaultWarcRecordOptions()
 			block, validation, err := newWarcFieldsBlock(&o, &WarcFields{}, tt.data, d)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if tt.wantCacheErr {
-				require.NotEmpty(t, validation)
+				if got := validation; len(got) == 0 {
+					t.Fatalf("validation = %v, want nonempty", got)
+				}
 			} else {
-				require.Empty(t, validation)
+				if got := validation; len(got) != 0 {
+					t.Fatalf("validation = %v, want empty", got)
+				}
 			}
 
 			validateCacheTest(t, block, content, digest, false)
@@ -129,15 +141,23 @@ func Test_warcfieldsBlock_IsCached(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			o := defaultWarcRecordOptions()
 			block, validation, err := newWarcFieldsBlock(&o, &WarcFields{}, tt.data, d)
-			require.NoError(t, err)
-			require.Empty(t, validation)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := validation; len(got) != 0 {
+				t.Fatalf("validation = %v, want empty", got)
+			}
 
 			got := block.IsCached()
-			assert.Equal(t, tt.want, got)
+			if got, want := got, tt.want; got != want {
+				t.Errorf("got = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -166,12 +186,18 @@ func Test_warcfieldsBlock_RawBytes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			o := defaultWarcRecordOptions()
 			block, validation, err := newWarcFieldsBlock(&o, &WarcFields{}, tt.data, d)
-			require.NoError(t, err)
-			require.Empty(t, validation)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := validation; len(got) != 0 {
+				t.Fatalf("validation = %v, want empty", got)
+			}
 
 			validateRawBytesTest(t, tt, block, content, digest)
 		})
@@ -198,24 +224,36 @@ func Test_warcfieldsBlock_Write(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d, err := newDigest("sha1", Base16)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			o := defaultWarcRecordOptions()
 			block, _, err := newWarcFieldsBlock(&o, &WarcFields{}, strings.NewReader(tt.content), d)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			wfblock := block.(*warcFieldsBlock)
 			var buf bytes.Buffer
 			n, err := wfblock.Write(&buf)
-			require.NoError(t, err)
-			assert.Greater(t, n, int64(0))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got, bound := n, int64(0); got <= bound {
+				t.Errorf("n = %v, want > %v", got, bound)
+			}
 
 			output := buf.String()
 			for _, want := range tt.wantContain {
-				assert.Contains(t, output, want)
+				if got, want := output, want; !strings.Contains(got, want) {
+					t.Errorf("output = %v, want to contain %v", got, want)
+				}
 			}
 			// Write should end with CRLF
-			assert.True(t, strings.HasSuffix(output, "\r\n"))
+			if got := strings.HasSuffix(output, "\r\n"); !got {
+				t.Errorf("strings.HasSuffix(output, \"\\r\\n\") = %v, want true", got)
+			}
 		})
 	}
 }
@@ -226,7 +264,9 @@ func Test_newWarcFieldsBlock_ReadError_ErrFail(t *testing.T) {
 	opts := &warcRecordOptions{errSyntax: ErrFail}
 
 	_, _, err := newWarcFieldsBlock(opts, &WarcFields{}, iotest.ErrReader(io.ErrUnexpectedEOF), d)
-	require.Error(t, err)
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
 }
 
 func Test_newWarcFieldsBlock_ReadError_ErrWarn(t *testing.T) {
@@ -235,9 +275,15 @@ func Test_newWarcFieldsBlock_ReadError_ErrWarn(t *testing.T) {
 	opts := &warcRecordOptions{errSyntax: ErrWarn}
 
 	block, validation, err := newWarcFieldsBlock(opts, &WarcFields{}, iotest.ErrReader(io.ErrUnexpectedEOF), d)
-	require.NoError(t, err)
-	assert.NotNil(t, block)
-	assert.NotEmpty(t, validation)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := block; got == nil {
+		t.Errorf("block = %v, want non-nil", got)
+	}
+	if got := validation; len(got) == 0 {
+		t.Errorf("validation = %v, want nonempty", got)
+	}
 }
 
 func Test_newWarcFieldsBlock_BlockValidationError_ErrBlockFail(t *testing.T) {
@@ -247,8 +293,12 @@ func Test_newWarcFieldsBlock_BlockValidationError_ErrBlockFail(t *testing.T) {
 
 	// Malformed warc fields content - errSyntax=ErrWarn puts error in blockValidation, errBlock=ErrFail returns it
 	_, _, err := newWarcFieldsBlock(opts, &WarcFields{}, strings.NewReader("invalid-no-colon-line\r\n"), d)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "warc fields block")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "warc fields block"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_newWarcFieldsBlock_BlockValidationError_ErrBlockWarn(t *testing.T) {
@@ -257,9 +307,15 @@ func Test_newWarcFieldsBlock_BlockValidationError_ErrBlockWarn(t *testing.T) {
 	opts := &warcRecordOptions{errBlock: ErrWarn, errSyntax: ErrWarn}
 
 	block, validation, err := newWarcFieldsBlock(opts, &WarcFields{}, strings.NewReader("invalid-no-colon-line\r\n"), d)
-	require.NoError(t, err)
-	assert.NotNil(t, block)
-	assert.NotEmpty(t, validation)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := block; got == nil {
+		t.Errorf("block = %v, want non-nil", got)
+	}
+	if got := validation; len(got) == 0 {
+		t.Errorf("validation = %v, want nonempty", got)
+	}
 }
 
 func Test_newWarcFieldsBlock_FixWarcFieldsBlockErrors(t *testing.T) {
@@ -269,8 +325,12 @@ func Test_newWarcFieldsBlock_FixWarcFieldsBlockErrors(t *testing.T) {
 
 	// Even with invalid content, fix should not error out
 	block, _, err := newWarcFieldsBlock(opts, &WarcFields{}, strings.NewReader("software: test\r\n"), d)
-	require.NoError(t, err)
-	assert.NotNil(t, block)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := block; got == nil {
+		t.Errorf("block = %v, want non-nil", got)
+	}
 }
 
 func Test_warcfieldsBlock_Write_Error(t *testing.T) {
@@ -278,10 +338,14 @@ func Test_warcfieldsBlock_Write_Error(t *testing.T) {
 	o := defaultWarcRecordOptions()
 
 	block, _, err := newWarcFieldsBlock(&o, &WarcFields{}, strings.NewReader("name: value\r\n"), d)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	wfblock := block.(*warcFieldsBlock)
 	w := &failWriterAt{failAfter: 0, err: io.ErrClosedPipe}
 	_, err = wfblock.Write(w)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }

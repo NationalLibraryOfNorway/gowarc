@@ -2,12 +2,12 @@ package gowarc
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/klauspost/compress/gzip"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // minimalRecord returns a valid WARC record string with the given type and record ID suffix.
@@ -165,8 +165,14 @@ func TestWarcFileReader_Records(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader, err := NewWarcFileReaderFromStream(bytes.NewReader(tt.data), 0, tt.opts...)
-			require.NoError(t, err)
-			defer func() { assert.NoError(t, reader.Close()) }()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			defer func() {
+				if err := reader.Close(); err != nil {
+					t.Errorf("reader.Close() error = %v", err)
+				}
+			}()
 
 			var got []Record
 			var iterErr error
@@ -180,55 +186,82 @@ func TestWarcFileReader_Records(t *testing.T) {
 			}
 
 			if tt.wantErr != "" {
-				require.Error(t, iterErr)
-				assert.Contains(t, iterErr.Error(), tt.wantErr)
+				if err := iterErr; err == nil {
+					t.Fatalf("iterErr: expected an error")
+				}
+				if got, want := iterErr.Error(), tt.wantErr; !strings.Contains(got, want) {
+					t.Errorf("iterErr.Error() = %v, want to contain %v", got, want)
+				}
 				return
 			}
 
 			if tt.wantErrIs != nil {
-				require.Error(t, iterErr, "expected an error from iterator")
-				assert.ErrorIs(t, iterErr, tt.wantErrIs)
+				if err := iterErr; err == nil {
+					t.Fatalf("iterErr: expected an error: %s", "expected an error from iterator")
+				}
+				if got, want := iterErr, tt.wantErrIs; !errors.Is(got, want) {
+					t.Errorf("iterErr = %v, want an error matching %v", got, want)
+				}
 			}
 
 			if tt.wantNoErr {
-				assert.NoError(t, iterErr, "expected no error from iterator")
+				if err := iterErr; err != nil {
+					t.Errorf("iterErr error = %v: %s", err, "expected no error from iterator")
+				}
 			}
 
-			require.Len(t, got, len(tt.wantRecords), "record count")
+			if got, want := len(got), len(tt.wantRecords); got != want {
+				t.Fatalf("len(got) = %v, want %v: %s", got, want, "record count")
+			}
 
 			// Validate offsets are monotonically increasing and non-overlapping
 			var prevEnd int64
 			for i, rec := range got {
 				want := tt.wantRecords[i]
 
-				assert.Equal(t, want.recordType, rec.WarcRecord.Type(), "record %d type", i)
+				if got, want := rec.WarcRecord.Type(), want.recordType; got != want {
+					t.Errorf("rec.WarcRecord.Type() = %#v, want %#v: %s", got, want, fmt.Sprintf("record %d type", i))
+				}
 				if want.idSuffix != "" {
-					assert.Contains(t, rec.WarcRecord.WarcHeader().Get(WarcRecordID), want.idSuffix, "record %d ID", i)
+					if got, want := rec.WarcRecord.WarcHeader().Get(WarcRecordID), want.idSuffix; !strings.Contains(got, want) {
+						t.Errorf("rec.WarcRecord.WarcHeader().Get(WarcRecordID) = %v, want to contain %v: %s", got, want, fmt.Sprintf("record %d ID", i))
+					}
 				}
 
 				if want.sizeGt0 {
-					assert.Greater(t, rec.Size, int64(0), "record %d size", i)
+					if got, bound := rec.Size, int64(0); got <= bound {
+						t.Errorf("rec.Size = %v, want > %v: %s", got, bound, fmt.Sprintf("record %d size", i))
+					}
 				}
 
 				if want.hasValidation {
-					assert.NotEmpty(t, rec.Validation, "record %d should have validation warnings", i)
+					if got := rec.Validation; len(got) == 0 {
+						t.Errorf("rec.Validation = %v, want nonempty: %s", got, fmt.Sprintf("record %d should have validation warnings", i))
+					}
 				} else {
-					assert.Empty(t, rec.Validation, "record %d should have no validation warnings", i)
+					if got := rec.Validation; len(got) != 0 {
+						t.Errorf("rec.Validation = %v, want empty: %s", got, fmt.Sprintf("record %d should have no validation warnings", i))
+					}
 				}
 
 				// Offset should be >= previous record's end
-				assert.GreaterOrEqual(t, rec.Offset, prevEnd, "record %d offset >= prev end", i)
+				if got, bound := rec.Offset, prevEnd; got < bound {
+					t.Errorf("rec.Offset = %v, want >= %v: %s", got, bound, fmt.Sprintf("record %d offset >= prev end", i))
+				}
 				prevEnd = rec.Offset + rec.Size
 
-				assert.NoError(t, rec.Close())
+				if err := rec.Close(); err != nil {
+					t.Errorf("rec.Close() error = %v", err)
+				}
 			}
 
 			// Consecutive records: sum of offset+size should be monotonic
 			if len(got) >= 2 {
 				for i := 1; i < len(got); i++ {
 					prevRecEnd := got[i-1].Offset + got[i-1].Size
-					assert.LessOrEqual(t, prevRecEnd, got[i].Offset,
-						"record %d should start at or after record %d ends", i, i-1)
+					if got, bound := prevRecEnd, got[i].Offset; got > bound {
+						t.Errorf("prevRecEnd = %v, want <= %v: %s", got, bound, fmt.Sprintf("record %d should start at or after record %d ends", i, i-1))
+					}
 				}
 			}
 		})
@@ -243,19 +276,33 @@ func TestWarcFileReader_Records_BreakEarly(t *testing.T) {
 
 	reader, err := NewWarcFileReaderFromStream(
 		bytes.NewReader([]byte(rec1+rec2+rec3)), 0)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, reader.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := reader.Close(); err != nil {
+			t.Errorf("reader.Close() error = %v", err)
+		}
+	}()
 
 	var count int
 	for rec, err := range reader.Records() {
-		require.NoError(t, err)
-		func() { assert.NoError(t, rec.Close()) }()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		func() {
+			if err := rec.Close(); err != nil {
+				t.Errorf("rec.Close() error = %v", err)
+			}
+		}()
 		count++
 		if count == 2 {
 			break
 		}
 	}
-	assert.Equal(t, 2, count, "should have seen exactly 2 records before break")
+	if got, want := count, 2; got != want {
+		t.Errorf("count = %#v, want %#v: %s", got, want, "should have seen exactly 2 records before break")
+	}
 }
 
 func TestWarcFileReader_Records_ValidationWarnings(t *testing.T) {
@@ -274,20 +321,38 @@ func TestWarcFileReader_Records_ValidationWarnings(t *testing.T) {
 	reader, err := NewWarcFileReaderFromStream(
 		strings.NewReader(input), 0,
 		WithSyntaxErrorPolicy(ErrWarn), WithSpecViolationPolicy(ErrWarn))
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, reader.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := reader.Close(); err != nil {
+			t.Errorf("reader.Close() error = %v", err)
+		}
+	}()
 
 	var records []Record
 	for rec, err := range reader.Records() {
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		records = append(records, rec)
 	}
 
-	require.Len(t, records, 1)
-	assert.NotEmpty(t, records[0].Validation, "should have validation warnings")
+	if got, want := len(records), 1; got != want {
+		t.Fatalf("len(records) = %v, want %v", got, want)
+	}
+	if got := records[0].Validation; len(got) == 0 {
+		t.Errorf("records[0].Validation = %v, want nonempty: %s", got, "should have validation warnings")
+	}
 	// Offset should account for the skipped garbage
-	assert.Equal(t, int64(2), records[0].Offset)
-	func() { assert.NoError(t, records[0].Close()) }()
+	if got, want := records[0].Offset, int64(2); got != want {
+		t.Errorf("records[0].Offset = %#v, want %#v", got, want)
+	}
+	func() {
+		if err := records[0].Close(); err != nil {
+			t.Errorf("records[0].Close() error = %v", err)
+		}
+	}()
 }
 
 func TestWarcFileReader_Records_SizeCoversFullRecord(t *testing.T) {
@@ -309,35 +374,66 @@ func TestWarcFileReader_Records_SizeCoversFullRecord(t *testing.T) {
 		WithMaxConcurrentWriters(1),
 	)
 	res := w.Write(createTestRecord(), createTestRecord())
-	require.Len(t, res, 2)
-	require.NoError(t, res[0].Err)
-	require.NoError(t, res[1].Err)
-	require.NoError(t, w.Close())
+	if got, want := len(res), 2; got != want {
+		t.Fatalf("len(res) = %v, want %v", got, want)
+	}
+	if err := res[0].Err; err != nil {
+		t.Fatalf("res[0].Err error = %v", err)
+	}
+	if err := res[1].Err; err != nil {
+		t.Fatalf("res[1].Err error = %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("w.Close() error = %v", err)
+	}
 
 	files := listFiles(t, dir, `\.warc$`)
-	require.Len(t, files, 1)
+	if got, want := len(files), 1; got != want {
+		t.Fatalf("len(files) = %v, want %v", got, want)
+	}
 
 	reader, err := NewWarcFileReader(dir+"/"+files[0], 0)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, reader.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := reader.Close(); err != nil {
+			t.Errorf("reader.Close() error = %v", err)
+		}
+	}()
 
 	var records []Record
 	for rec, err := range reader.Records() {
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		records = append(records, rec)
-		defer func() { assert.NoError(t, rec.Close()) }()
+		defer func() {
+			if err := rec.Close(); err != nil {
+				t.Errorf("rec.Close() error = %v", err)
+			}
+		}()
 	}
 
-	require.Len(t, records, 2)
-	assert.Equal(t, int64(0), records[0].Offset)
-	assert.Greater(t, records[0].Size, int64(0))
+	if got, want := len(records), 2; got != want {
+		t.Fatalf("len(records) = %v, want %v", got, want)
+	}
+	if got, want := records[0].Offset, int64(0); got != want {
+		t.Errorf("records[0].Offset = %#v, want %#v", got, want)
+	}
+	if got, bound := records[0].Size, int64(0); got <= bound {
+		t.Errorf("records[0].Size = %v, want > %v", got, bound)
+	}
 	// Second record starts exactly where the first ends
-	assert.Equal(t, records[0].Offset+records[0].Size, records[1].Offset,
-		"second record offset should equal first record offset + size")
+	if got, want := records[1].Offset, records[0].Offset+records[0].Size; got != want {
+		t.Errorf("records[1].Offset = %#v, want %#v: %s", got, want, "second record offset should equal first record offset + size")
+	}
 }
 
 func TestRecord_Close_NilWarcRecord(t *testing.T) {
 	// Record.Close() should be safe to call when WarcRecord is nil
 	r := Record{}
-	assert.NoError(t, r.Close())
+	if err := r.Close(); err != nil {
+		t.Errorf("r.Close() error = %v", err)
+	}
 }

@@ -3,21 +3,34 @@ package gowarc
 import (
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestDefaultWarcRecordOptions_AreNonMutating(t *testing.T) {
 	o := defaultWarcRecordOptions()
 
-	assert.False(t, o.addMissingRecordId)
-	assert.False(t, o.addMissingContentLength)
-	assert.False(t, o.addMissingDigest)
-	assert.False(t, o.fixContentLength)
-	assert.False(t, o.fixDigest)
-	assert.False(t, o.fixSyntaxErrors)
-	assert.False(t, o.fixWarcFieldsBlockErrors)
+	if got := o.addMissingRecordId; got {
+		t.Errorf("o.addMissingRecordId = %v, want false", got)
+	}
+	if got := o.addMissingContentLength; got {
+		t.Errorf("o.addMissingContentLength = %v, want false", got)
+	}
+	if got := o.addMissingDigest; got {
+		t.Errorf("o.addMissingDigest = %v, want false", got)
+	}
+	if got := o.fixContentLength; got {
+		t.Errorf("o.fixContentLength = %v, want false", got)
+	}
+	if got := o.fixDigest; got {
+		t.Errorf("o.fixDigest = %v, want false", got)
+	}
+	if got := o.fixSyntaxErrors; got {
+		t.Errorf("o.fixSyntaxErrors = %v, want false", got)
+	}
+	if got := o.fixWarcFieldsBlockErrors; got {
+		t.Errorf("o.fixWarcFieldsBlockErrors = %v, want false", got)
+	}
 }
 
 func TestBuilderAddsMandatoryHeadersRegardlessOfAddMissingOptions(t *testing.T) {
@@ -30,15 +43,29 @@ func TestBuilderAddsMandatoryHeadersRegardlessOfAddMissingOptions(t *testing.T) 
 	_, _ = rb.WriteString("hello")
 
 	record, _, err := rb.Build()
-	assert.NoError(t, err)
-	defer func() { assert.NoError(t, record.Close()) }()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
-	assert.True(t, record.WarcHeader().Has(WarcRecordID))
-	assert.Equal(t, "5", record.WarcHeader().Get(ContentLength))
+	if got := record.WarcHeader().Has(WarcRecordID); !got {
+		t.Errorf("record.WarcHeader().Has(WarcRecordID) = %v, want true", got)
+	}
+	if got, want := record.WarcHeader().Get(ContentLength), "5"; got != want {
+		t.Errorf("record.WarcHeader().Get(ContentLength) = %#v, want %#v", got, want)
+	}
 
 	length, err := strconv.ParseInt(record.WarcHeader().Get(ContentLength), 10, 64)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(5), length)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := length, int64(5); got != want {
+		t.Errorf("length = %#v, want %#v", got, want)
+	}
 }
 
 func TestWithVersion(t *testing.T) {
@@ -58,10 +85,18 @@ func TestWithVersion(t *testing.T) {
 			rb.AddWarcHeader(WarcDate, "2024-01-01T00:00:00Z")
 			rb.AddWarcHeader(ContentType, ApplicationWarcFields)
 			record, _, err := rb.Build()
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, record.Close()) }()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
-			assert.Equal(t, tt.want, record.Version().String())
+			if got, want := record.Version().String(), tt.want; got != want {
+				t.Errorf("record.Version().String() = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -91,10 +126,18 @@ func TestWithRecordIdFunc(t *testing.T) {
 			rb.AddWarcHeader(WarcDate, "2024-01-01T00:00:00Z")
 			rb.AddWarcHeader(ContentType, ApplicationWarcFields)
 			record, _, err := rb.Build()
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, record.Close()) }()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
-			assert.Equal(t, tt.wantID, record.RecordId())
+			if got, want := record.RecordId(), tt.wantID; got != want {
+				t.Errorf("record.RecordId() = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -120,11 +163,19 @@ func TestWithDefaultDigestAlgorithm(t *testing.T) {
 			rb.AddWarcHeader(ContentType, ApplicationWarcFields)
 			_, _ = rb.WriteString("test data")
 			record, _, err := rb.Build()
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, record.Close()) }()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
 			digest := record.WarcHeader().Get(WarcBlockDigest)
-			assert.Contains(t, digest, tt.prefix) // e.g. "sha256:..."
+			if got, want := digest, tt.prefix; !strings.Contains(got, want) {
+				t.Errorf("digest = %v, want to contain %v", got, want)
+			} // e.g. "sha256:..."
 		})
 	}
 }
@@ -138,12 +189,20 @@ func TestWithSkipParseBlock(t *testing.T) {
 	rb.AddWarcHeader(ContentType, "application/http;msgtype=response")
 	_, _ = rb.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nHello")
 	record, _, err := rb.Build()
-	assert.NoError(t, err)
-	defer func() { assert.NoError(t, record.Close()) }()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	// With SkipParseBlock, block should NOT be an HttpResponseBlock
 	_, ok := record.Block().(HttpResponseBlock)
-	assert.False(t, ok, "expected generic block when SkipParseBlock is set")
+	if got := ok; got {
+		t.Errorf("ok = %v, want false: %s", got, "expected generic block when SkipParseBlock is set")
+	}
 }
 
 func TestWithNoValidation(t *testing.T) {
@@ -152,12 +211,20 @@ func TestWithNoValidation(t *testing.T) {
 	// Deliberately don't add any required headers
 	_, _ = rb.WriteString("some content")
 	record, _, err := rb.Build()
-	assert.NoError(t, err)
-	defer func() { assert.NoError(t, record.Close()) }()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	// With SkipParseBlock (implied by NoValidation), the block should be generic
 	_, ok := record.Block().(WarcFieldsBlock)
-	assert.False(t, ok, "expected generic block with NoValidation (skipParseBlock=true)")
+	if got := ok; got {
+		t.Errorf("ok = %v, want false: %s", got, "expected generic block with NoValidation (skipParseBlock=true)")
+	}
 }
 
 func TestWithBufferTmpDir(t *testing.T) {
@@ -170,8 +237,14 @@ func TestWithBufferTmpDir(t *testing.T) {
 	rb.AddWarcHeader(ContentType, ApplicationWarcFields)
 	_, _ = rb.WriteString("test buffer dir")
 	record, _, err := rb.Build()
-	assert.NoError(t, err)
-	defer func() { assert.NoError(t, record.Close()) }()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 }
 
 func TestWithBufferMaxMemBytes(t *testing.T) {
@@ -184,8 +257,14 @@ func TestWithBufferMaxMemBytes(t *testing.T) {
 	rb.AddWarcHeader(ContentType, ApplicationWarcFields)
 	_, _ = rb.WriteString("small content")
 	record, _, err := rb.Build()
-	assert.NoError(t, err)
-	defer func() { assert.NoError(t, record.Close()) }()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 }
 
 func TestDefaultRecordIDFormat(t *testing.T) {

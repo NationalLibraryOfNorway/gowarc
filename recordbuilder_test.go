@@ -19,12 +19,10 @@ package gowarc
 import (
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRecordBuilder(t *testing.T) {
@@ -479,52 +477,77 @@ func TestRecordBuilder(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := assert.New(t)
 
 			rb := NewRecordBuilder(tt.args.recordType, tt.args.opts...)
 			for _, nv := range *tt.args.headers {
 				rb.AddWarcHeader(nv.Name, nv.Value)
 			}
 			_, err := rb.WriteString(tt.args.data)
-			assert.NoError(err)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 			wr, validation, err := rb.Build()
 			if err == nil {
 				defer wr.Close() //nolint
 			}
 
 			if tt.wantErr {
-				assert.Error(err)
+				if err == nil {
+					t.Errorf("err: expected an error")
+				}
 				return
 			} else {
-				assert.NoError(err)
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
 			}
 
-			assert.ElementsMatch([]*nameValue(*tt.want.headers), []*nameValue(*wr.WarcHeader()))
-			assert.IsType(tt.want.blockType, wr.Block())
-			assert.Equal(tt.want.validation, validation)
+			if got, want := []*nameValue(*wr.WarcHeader()), []*nameValue(*tt.want.headers); !equalHeaderFields(got, want) {
+				t.Errorf("header fields = %v, want %v (ignoring order)", got, want)
+			}
+			if got, want := wr.Block(), tt.want.blockType; reflect.TypeOf(got) != reflect.TypeOf(want) {
+				t.Errorf("type = %T, want %T", got, want)
+			}
+			if got, want := validation, tt.want.validation; !reflect.DeepEqual(got, want) {
+				t.Errorf("validation = %#v, want %#v", got, want)
+			}
 			r, err := wr.Block().RawBytes()
-			assert.Nil(err)
+			if got := err; got != nil {
+				t.Errorf("err = %v, want nil", got)
+			}
 			b, err := io.ReadAll(r)
-			assert.Nil(err)
-			assert.Equal(tt.want.data, string(b))
+			if got := err; got != nil {
+				t.Errorf("err = %v, want nil", got)
+			}
+			if got, want := string(b), tt.want.data; got != want {
+				t.Errorf("string(b) = %#v, want %#v", got, want)
+			}
 
-			assert.Equal(tt.want.cached, wr.Block().IsCached())
+			if got, want := wr.Block().IsCached(), tt.want.cached; got != want {
+				t.Errorf("wr.Block().IsCached() = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
 
 func TestRecordBuilder_AddWarcHeader(t *testing.T) {
 	loc, err := time.LoadLocation("Europe/Oslo")
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 	tm, err := time.ParseInLocation(time.ANSIC, "Mon Mar  6 05:03:53 2017", loc)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 	rb := NewRecordBuilder(Warcinfo)
 	rb.AddWarcHeader(WarcRecordID, "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>")
 	rb.AddWarcHeaderTime(WarcDate, tm)
 	rb.AddWarcHeaderInt64(ContentLength, int64(238))
 	rb.AddWarcHeaderInt(WarcSegmentNumber, 2)
 	record, validation, err := rb.Build()
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 	defer record.Close() //nolint
 
 	rb = NewRecordBuilder(Warcinfo)
@@ -533,11 +556,17 @@ func TestRecordBuilder_AddWarcHeader(t *testing.T) {
 	rb.AddWarcHeader(ContentLength, "238")
 	rb.AddWarcHeader(WarcSegmentNumber, "2")
 	expected, expectedValidation, err := rb.Build()
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 	defer record.Close() //nolint
 
-	assert.ElementsMatch(t, []*nameValue(*expected.WarcHeader()), []*nameValue(*record.WarcHeader()))
-	assert.Equal(t, expectedValidation, validation)
+	if got, want := []*nameValue(*record.WarcHeader()), []*nameValue(*expected.WarcHeader()); !equalHeaderFields(got, want) {
+		t.Errorf("header fields = %v, want %v (ignoring order)", got, want)
+	}
+	if got, want := validation, expectedValidation; !reflect.DeepEqual(got, want) {
+		t.Errorf("validation = %#v, want %#v", got, want)
+	}
 }
 
 func TestRecordBuilder_Write(t *testing.T) {
@@ -558,17 +587,31 @@ func TestRecordBuilder_Write(t *testing.T) {
 			rb.AddWarcHeader(ContentType, ApplicationWarcFields)
 
 			n, err := rb.Write(tt.data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.wantLen, n)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if got, want := n, tt.wantLen; got != want {
+				t.Errorf("n = %#v, want %#v", got, want)
+			}
 
 			record, _, err := rb.Build()
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, record.Close()) }()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
 			r, err := record.Block().RawBytes()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 			content, _ := io.ReadAll(r)
-			assert.Equal(t, tt.data, content)
+			if got, want := content, tt.data; !reflect.DeepEqual(got, want) {
+				t.Errorf("content = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -590,17 +633,31 @@ func TestRecordBuilder_ReadFrom(t *testing.T) {
 			rb.AddWarcHeader(ContentType, ApplicationWarcFields)
 
 			n, err := rb.ReadFrom(strings.NewReader(tt.data))
-			assert.NoError(t, err)
-			assert.Equal(t, tt.wantLen, n)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if got, want := n, tt.wantLen; got != want {
+				t.Errorf("n = %#v, want %#v", got, want)
+			}
 
 			record, _, err := rb.Build()
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, record.Close()) }()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
 			r, err := record.Block().RawBytes()
-			assert.NoError(t, err)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 			content, _ := io.ReadAll(r)
-			assert.Equal(t, tt.data, string(content))
+			if got, want := string(content), tt.data; got != want {
+				t.Errorf("string(content) = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -622,14 +679,24 @@ func TestRecordBuilder_Size(t *testing.T) {
 			rb.AddWarcHeader(WarcDate, "2024-01-01T00:00:00Z")
 			rb.AddWarcHeader(ContentType, ApplicationWarcFields)
 
-			assert.Equal(t, int64(0), rb.Size())
+			if got, want := rb.Size(), int64(0); got != want {
+				t.Errorf("rb.Size() = %#v, want %#v", got, want)
+			}
 
 			_, _ = rb.WriteString(tt.data)
-			assert.Equal(t, tt.wantSize, rb.Size())
+			if got, want := rb.Size(), tt.wantSize; got != want {
+				t.Errorf("rb.Size() = %#v, want %#v", got, want)
+			}
 
 			record, _, err := rb.Build()
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, record.Close()) }()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 		})
 	}
 }
@@ -655,11 +722,21 @@ func TestRecordBuilder_SetRecordType(t *testing.T) {
 			rb.SetRecordType(tt.override)
 
 			record, _, err := rb.Build()
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, record.Close()) }()
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
-			assert.Equal(t, tt.override, record.Type())
-			assert.Equal(t, tt.wantHeader, record.WarcHeader().Get(WarcType))
+			if got, want := record.Type(), tt.override; got != want {
+				t.Errorf("record.Type() = %#v, want %#v", got, want)
+			}
+			if got, want := record.WarcHeader().Get(WarcType), tt.wantHeader; got != want {
+				t.Errorf("record.WarcHeader().Get(WarcType) = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -677,8 +754,12 @@ func TestRecordBuilder_Build_FailedRecordIdFunc(t *testing.T) {
 	rb.AddWarcHeader(ContentLength, "0")
 
 	_, _, err := rb.Build()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "id gen failed")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "id gen failed"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestRecordBuilder_Build_ValidationFailure(t *testing.T) {
@@ -691,7 +772,9 @@ func TestRecordBuilder_Build_ValidationFailure(t *testing.T) {
 	rb.AddWarcHeader(ContentLength, "0")
 
 	_, _, err := rb.Build()
-	require.Error(t, err)
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
 }
 
 func TestRecordBuilder_AddWarcHeaderTime_V1_0(t *testing.T) {
@@ -706,11 +789,19 @@ func TestRecordBuilder_AddWarcHeaderTime_V1_0(t *testing.T) {
 	rb.AddWarcHeader(ContentLength, "0")
 
 	rec, _, err := rb.Build()
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
 
 	// V1_0 should use RFC3339 (no nanoseconds)
-	assert.Equal(t, "2024-01-01T12:30:45Z", rec.WarcHeader().Get(WarcDate))
+	if got, want := rec.WarcHeader().Get(WarcDate), "2024-01-01T12:30:45Z"; got != want {
+		t.Errorf("rec.WarcHeader().Get(WarcDate) = %#v, want %#v", got, want)
+	}
 }
 
 func TestRecordBuilder_AddWarcHeaderTime_V1_1(t *testing.T) {
@@ -725,11 +816,19 @@ func TestRecordBuilder_AddWarcHeaderTime_V1_1(t *testing.T) {
 	rb.AddWarcHeader(ContentLength, "0")
 
 	rec, _, err := rb.Build()
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
 
 	// V1_1 should use RFC3339Nano
-	assert.Equal(t, "2024-01-01T12:30:45.123456789Z", rec.WarcHeader().Get(WarcDate))
+	if got, want := rec.WarcHeader().Get(WarcDate), "2024-01-01T12:30:45.123456789Z"; got != want {
+		t.Errorf("rec.WarcHeader().Get(WarcDate) = %#v, want %#v", got, want)
+	}
 }
 
 func TestRecordBuilder_NoRecordType(t *testing.T) {
@@ -742,17 +841,31 @@ func TestRecordBuilder_NoRecordType(t *testing.T) {
 	rb.AddWarcHeader(ContentLength, "0")
 
 	rec, _, err := rb.Build()
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.Equal(t, RecordType(0), rec.Type())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got, want := rec.Type(), RecordType(0); got != want {
+		t.Errorf("rec.Type() = %#v, want %#v", got, want)
+	}
 }
 
 func TestRecordBuilder_Close(t *testing.T) {
 	rb := NewRecordBuilder(Warcinfo)
 	_, err := rb.WriteString("test")
-	require.NoError(t, err)
-	assert.Equal(t, int64(4), rb.Size())
-	require.NoError(t, rb.Close())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := rb.Size(), int64(4); got != want {
+		t.Errorf("rb.Size() = %#v, want %#v", got, want)
+	}
+	if err := rb.Close(); err != nil {
+		t.Fatalf("rb.Close() error = %v", err)
+	}
 }
 
 func TestRecordBuilder_Build_RecordIdFuncError(t *testing.T) {
@@ -764,13 +877,19 @@ func TestRecordBuilder_Build_RecordIdFuncError(t *testing.T) {
 		WithAddMissingRecordId(true),
 	)
 	_, err := rb.WriteString("test")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	rb.AddWarcHeader(WarcDate, "2024-01-01T00:00:00Z")
 	rb.AddWarcHeader(ContentType, "application/warc-fields")
 	rb.AddWarcHeader(ContentLength, "4")
 
 	// Build should fail because recordIdFunc errors
 	_, _, err = rb.Build()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "id generation failed")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "id generation failed"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }

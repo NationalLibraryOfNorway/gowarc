@@ -23,9 +23,6 @@ import (
 	"io"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDefaultMarshaler_Marshal(t *testing.T) {
@@ -126,7 +123,11 @@ func TestDefaultMarshaler_Marshal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create record
 			record := createMarshalerTestRecord(tt.recordType, tt.headers, tt.content)
-			defer func() { assert.NoError(t, record.Close()) }()
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
 			// Marshal record
 			marshaler := NewMarshaler()
@@ -134,30 +135,44 @@ func TestDefaultMarshaler_Marshal(t *testing.T) {
 			continuation, size, err := marshaler.Marshal(&buf, record, 0)
 
 			// Verify no error
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			// Verify no continuation (segmentation not implemented)
-			assert.Nil(t, continuation)
+			if got := continuation; got != nil {
+				t.Errorf("continuation = %v, want nil", got)
+			}
 
 			// Verify size is positive
-			assert.Greater(t, size, int64(0))
+			if got, bound := size, int64(0); got <= bound {
+				t.Errorf("size = %v, want > %v", got, bound)
+			}
 
 			// Verify size matches actual bytes written
-			assert.Equal(t, int64(buf.Len()), size)
+			if got, want := size, int64(buf.Len()); got != want {
+				t.Errorf("size = %#v, want %#v", got, want)
+			}
 
 			// Get output
 			output := buf.String()
 
 			// Verify output contains expected strings
 			for _, want := range tt.wantInOutput {
-				assert.Contains(t, output, want, "output should contain: %s", want)
+				if got, want := output, want; !strings.Contains(got, want) {
+					t.Errorf("output = %v, want to contain %v: %s", got, want, fmt.Sprintf("output should contain: %s", want))
+				}
 			}
 
 			// Verify structure: starts with WARC version
-			assert.True(t, strings.HasPrefix(output, "WARC/1.1\r\n"))
+			if got := strings.HasPrefix(output, "WARC/1.1\r\n"); !got {
+				t.Errorf("strings.HasPrefix(output, \"WARC/1.1\\r\\n\") = %v, want true", got)
+			}
 
 			// Verify structure: ends with double CRLF
-			assert.True(t, strings.HasSuffix(output, "\r\n\r\n"))
+			if got := strings.HasSuffix(output, "\r\n\r\n"); !got {
+				t.Errorf("strings.HasSuffix(output, \"\\r\\n\\r\\n\") = %v, want true", got)
+			}
 
 			// Verify structure: has header separator (CRLF between headers and content)
 			headerEnd := strings.Index(output, "\r\n\r\n")
@@ -166,7 +181,9 @@ func TestDefaultMarshaler_Marshal(t *testing.T) {
 
 			// Verify content matches
 			actualContent := output[contentStart:contentEnd]
-			assert.Equal(t, tt.content, actualContent)
+			if got, want := actualContent, tt.content; got != want {
+				t.Errorf("actualContent = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -180,16 +197,26 @@ func TestDefaultMarshaler_MarshalWithMaxSize(t *testing.T) {
 		&nameValue{Name: ContentLength, Value: "5"},
 	}
 	record := createMarshalerTestRecord(Resource, headers, "Hello")
-	defer func() { assert.NoError(t, record.Close()) }()
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	// Marshal with maxSize (currently not implemented, so should ignore)
 	marshaler := NewMarshaler()
 	var buf bytes.Buffer
 	continuation, size, err := marshaler.Marshal(&buf, record, 100)
 
-	require.NoError(t, err)
-	assert.Nil(t, continuation) // Segmentation not implemented yet
-	assert.Greater(t, size, int64(0))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := continuation; got != nil {
+		t.Errorf("continuation = %v, want nil", got)
+	} // Segmentation not implemented yet
+	if got, bound := size, int64(0); got <= bound {
+		t.Errorf("size = %v, want > %v", got, bound)
+	}
 }
 
 func TestDefaultMarshaler_WriteRecord(t *testing.T) {
@@ -227,19 +254,31 @@ func TestDefaultMarshaler_WriteRecord(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			record := createMarshalerTestRecord(tt.recordType, tt.headers, tt.content)
-			defer func() { assert.NoError(t, record.Close()) }()
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
 			marshaler := &defaultMarshaler{}
 			var buf bytes.Buffer
 			size, err := marshaler.writeRecord(&buf, record)
 
-			require.NoError(t, err)
-			assert.Greater(t, size, int64(0))
-			assert.Equal(t, int64(buf.Len()), size)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got, bound := size, int64(0); got <= bound {
+				t.Errorf("size = %v, want > %v", got, bound)
+			}
+			if got, want := size, int64(buf.Len()); got != want {
+				t.Errorf("size = %#v, want %#v", got, want)
+			}
 
 			output := buf.String()
 			for _, want := range tt.wantContains {
-				assert.Contains(t, output, want)
+				if got, want := output, want; !strings.Contains(got, want) {
+					t.Errorf("output = %v, want to contain %v", got, want)
+				}
 			}
 		})
 	}
@@ -297,13 +336,21 @@ func TestDefaultMarshaler_writeRecord_ErrorAtVersion(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "text/plain"},
 		&nameValue{Name: ContentLength, Value: "4"},
 	}, "test")
-	defer func() { assert.NoError(t, record.Close()) }()
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	m := &defaultMarshaler{}
 	w := &errWriter{n: 0, err: fmt.Errorf("write version failed")}
 	_, err := m.writeRecord(w, record)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "write version failed")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "write version failed"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestDefaultMarshaler_writeRecord_ErrorAtVersionCRLF(t *testing.T) {
@@ -313,14 +360,22 @@ func TestDefaultMarshaler_writeRecord_ErrorAtVersionCRLF(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "text/plain"},
 		&nameValue{Name: ContentLength, Value: "4"},
 	}, "test")
-	defer func() { assert.NoError(t, record.Close()) }()
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	m := &defaultMarshaler{}
 	// Allow version string ("WARC/1.1" = 8 bytes) but fail on CRLF
 	w := &errWriter{n: 8, err: fmt.Errorf("write crlf failed")}
 	_, err := m.writeRecord(w, record)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "write crlf failed")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "write crlf failed"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestDefaultMarshaler_writeRecord_ErrorAtHeaders(t *testing.T) {
@@ -330,14 +385,22 @@ func TestDefaultMarshaler_writeRecord_ErrorAtHeaders(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "text/plain"},
 		&nameValue{Name: ContentLength, Value: "4"},
 	}, "test")
-	defer func() { assert.NoError(t, record.Close()) }()
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	m := &defaultMarshaler{}
 	// Allow version + CRLF (10 bytes) but fail on headers
 	w := &errWriter{n: 10, err: fmt.Errorf("write headers failed")}
 	_, err := m.writeRecord(w, record)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "write headers failed")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "write headers failed"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestDefaultMarshaler_writeRecord_ErrorAtContent(t *testing.T) {
@@ -347,13 +410,19 @@ func TestDefaultMarshaler_writeRecord_ErrorAtContent(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "text/plain"},
 		&nameValue{Name: ContentLength, Value: "4"},
 	}, "test")
-	defer func() { assert.NoError(t, record.Close()) }()
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	// Write the record to measure total size
 	var countBuf bytes.Buffer
 	m := &defaultMarshaler{}
 	totalSize, err := m.writeRecord(&countBuf, record)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Create a new identical record (the first one's block has been consumed)
 	record2 := createMarshalerTestRecord(Warcinfo, &WarcFields{
@@ -362,13 +431,21 @@ func TestDefaultMarshaler_writeRecord_ErrorAtContent(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "text/plain"},
 		&nameValue{Name: ContentLength, Value: "4"},
 	}, "test")
-	defer func() { assert.NoError(t, record2.Close()) }()
+	defer func() {
+		if err := record2.Close(); err != nil {
+			t.Errorf("record2.Close() error = %v", err)
+		}
+	}()
 
 	// Allow all bytes except content(4) + end marker(4) = 8 bytes
 	w := &errWriter{n: int(totalSize) - 8, err: fmt.Errorf("write content failed")}
 	_, err = m.writeRecord(w, record2)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "write content failed")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "write content failed"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestDefaultMarshaler_writeRecord_ErrorAtEndMarker(t *testing.T) {
@@ -378,13 +455,19 @@ func TestDefaultMarshaler_writeRecord_ErrorAtEndMarker(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "text/plain"},
 		&nameValue{Name: ContentLength, Value: "0"},
 	}, "")
-	defer func() { assert.NoError(t, record.Close()) }()
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	// Write the record successfully to determine total size minus the end marker
 	var countBuf bytes.Buffer
 	m := &defaultMarshaler{}
 	totalSize, err := m.writeRecord(&countBuf, record)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Now create an identical record and fail at the end marker
 	record2 := createMarshalerTestRecord(Warcinfo, &WarcFields{
@@ -393,13 +476,21 @@ func TestDefaultMarshaler_writeRecord_ErrorAtEndMarker(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "text/plain"},
 		&nameValue{Name: ContentLength, Value: "0"},
 	}, "")
-	defer func() { assert.NoError(t, record2.Close()) }()
+	defer func() {
+		if err := record2.Close(); err != nil {
+			t.Errorf("record2.Close() error = %v", err)
+		}
+	}()
 
 	// Allow all bytes except the last 4 (end marker \r\n\r\n)
 	w := &errWriter{n: int(totalSize) - 4, err: fmt.Errorf("write end marker failed")}
 	_, err = m.writeRecord(w, record2)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "write end marker failed")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "write end marker failed"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_writeRecord_RawBytesError(t *testing.T) {
@@ -419,17 +510,27 @@ func Test_writeRecord_RawBytesError(t *testing.T) {
 
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrIgnore), WithSyntaxErrorPolicy(ErrIgnore))
 	rec, _, _, err := u.Unmarshal(bufio.NewReader(io.NopCloser(strings.NewReader(rawWARC))))
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
 
 	// Consume the block to make it inaccessible
 	r, err := rec.Block().RawBytes()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	_, _ = io.ReadAll(r)
 
 	// Now marshal should fail because RawBytes() returns errContentReAccessed
 	m := &defaultMarshaler{}
 	var buf bytes.Buffer
 	_, err = m.writeRecord(&buf, rec)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }

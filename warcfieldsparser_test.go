@@ -24,10 +24,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestParseWarcFields(t *testing.T) {
@@ -544,14 +543,21 @@ func TestParseWarcFields(t *testing.T) {
 
 			got, validation, err := p.Parse(r)
 
-			assert := assert.New(t)
 			if tt.wantErr {
-				assert.Error(err)
+				if err == nil {
+					t.Errorf("err: expected an error")
+				}
 			} else {
-				assert.NoError(err)
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
 			}
-			assert.Equal(tt.want, got)
-			assert.Equal(tt.wantValidation, validation, "%v", validation)
+			if got, want := got, tt.want; !reflect.DeepEqual(got, want) {
+				t.Errorf("got = %#v, want %#v", got, want)
+			}
+			if got, want := validation, tt.wantValidation; !reflect.DeepEqual(got, want) {
+				t.Errorf("validation = %#v, want %#v: %s", got, want, fmt.Sprintf("%v", validation))
+			}
 		})
 	}
 }
@@ -667,7 +673,9 @@ func TestParseWarcFields_FatalReadError(t *testing.T) {
 	r := bufio.NewReader(fr)
 	p := &warcfieldsParser{Options: newOptions(WithSyntaxErrorPolicy(ErrWarn))}
 	_, _, err := p.Parse(r)
-	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	if got, want := err, io.ErrUnexpectedEOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestParseWarcFields_FatalReadError_InContinuation(t *testing.T) {
@@ -682,7 +690,9 @@ func TestParseWarcFields_FatalReadError_InContinuation(t *testing.T) {
 	r := bufio.NewReader(fr)
 	p := &warcfieldsParser{Options: newOptions(WithSyntaxErrorPolicy(ErrWarn))}
 	_, _, err := p.Parse(r)
-	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	if got, want := err, io.ErrUnexpectedEOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestIsFatalReadErr(t *testing.T) {
@@ -702,7 +712,9 @@ func TestIsFatalReadErr(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, isFatalReadErr(tt.err))
+			if got, want := isFatalReadErr(tt.err), tt.want; got != want {
+				t.Errorf("isFatalReadErr(tt.err) = %#v, want %#v", got, want)
+			}
 		})
 	}
 }

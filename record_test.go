@@ -18,14 +18,13 @@ package gowarc
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_warcRecord_ToRevisitRecord(t *testing.T) {
@@ -234,31 +233,53 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := assert.New(t)
+
 			if !tt.record.Block().IsCached() {
-				assert.NoError(tt.record.Block().Cache())
+				if err := tt.record.Block().Cache(); err != nil {
+					t.Errorf("tt.record.Block().Cache() error = %v", err)
+				}
 			}
 			defer func() { _ = tt.record.Close() }()
 
 			got, err := tt.record.ToRevisitRecord(tt.ref)
 			if tt.wantErr {
-				assert.Error(err)
-				assert.Nil(got)
+				if err == nil {
+					t.Errorf("err: expected an error")
+				}
+				if got != nil {
+					t.Errorf("got = %v, want nil", got)
+				}
 				return
 			} else {
-				require.NoError(t, err)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
 			}
 
-			assert.Equal(Revisit.String(), got.Type().String())
-			assert.ElementsMatch([]*nameValue(*tt.want.headers), []*nameValue(*got.WarcHeader()))
-			assert.IsType(&revisitBlock{}, got.Block())
+			if got, want := got.Type().String(), Revisit.String(); got != want {
+				t.Errorf("got.Type().String() = %#v, want %#v", got, want)
+			}
+			if got, want := []*nameValue(*got.WarcHeader()), []*nameValue(*tt.want.headers); !equalHeaderFields(got, want) {
+				t.Errorf("header fields = %v, want %v (ignoring order)", got, want)
+			}
+			if _, ok := got.Block().(*revisitBlock); !ok {
+				t.Errorf("block type = %T, want *revisitBlock", got.Block())
+			}
 			r, err := got.Block().RawBytes()
-			assert.Nil(err)
+			if got := err; got != nil {
+				t.Errorf("err = %v, want nil", got)
+			}
 			b, err := io.ReadAll(r)
-			assert.Nil(err)
-			assert.Equal(tt.want.data, string(b))
+			if got := err; got != nil {
+				t.Errorf("err = %v, want nil", got)
+			}
+			if got, want := string(b), tt.want.data; got != want {
+				t.Errorf("string(b) = %#v, want %#v", got, want)
+			}
 
-			assert.True(got.Block().IsCached())
+			if got := got.Block().IsCached(); !got {
+				t.Errorf("got.Block().IsCached() = %v, want true", got)
+			}
 		})
 	}
 }
@@ -462,7 +483,7 @@ func Test_warcRecord_Merge(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := assert.New(t)
+
 			defer func() { _ = tt.revisitRecord.Close() }()
 			defer func() {
 				for _, r := range tt.referencedRecord {
@@ -471,33 +492,61 @@ func Test_warcRecord_Merge(t *testing.T) {
 			}()
 
 			rr, err := tt.revisitRecord.RevisitRef()
-			assert.NoError(err)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 			revisitRef, err := tt.referencedRecord[0].CreateRevisitRef(rr.Profile)
-			assert.NoError(err)
-			assert.Equal(revisitRef, rr)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if got, want := rr, revisitRef; !reflect.DeepEqual(got, want) {
+				t.Errorf("rr = %#v, want %#v", got, want)
+			}
 
 			got, err := tt.revisitRecord.Merge(tt.referencedRecord...)
 			if tt.wantErr {
-				assert.Error(err)
-				assert.Nil(got)
+				if err == nil {
+					t.Errorf("err: expected an error")
+				}
+				if got != nil {
+					t.Errorf("got = %v, want nil", got)
+				}
 				return
 			} else {
-				require.NoError(t, err)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
 			}
 
-			assert.Equal(tt.want.recordType.String(), got.Type().String())
-			assert.ElementsMatch([]*nameValue(*tt.want.headers), []*nameValue(*got.WarcHeader()))
-			assert.IsType(&httpResponseBlock{}, got.Block())
+			if got, want := got.Type().String(), tt.want.recordType.String(); got != want {
+				t.Errorf("got.Type().String() = %#v, want %#v", got, want)
+			}
+			if got, want := []*nameValue(*got.WarcHeader()), []*nameValue(*tt.want.headers); !equalHeaderFields(got, want) {
+				t.Errorf("header fields = %v, want %v (ignoring order)", got, want)
+			}
+			if _, ok := got.Block().(*httpResponseBlock); !ok {
+				t.Errorf("block type = %T, want *httpResponseBlock", got.Block())
+			}
 			respBlock := got.Block().(*httpResponseBlock)
-			assert.Equal(tt.want.httpHeaders, respBlock.httpHeader)
+			if got, want := respBlock.httpHeader, tt.want.httpHeaders; !reflect.DeepEqual(got, want) {
+				t.Errorf("respBlock.httpHeader = %#v, want %#v", got, want)
+			}
 
 			r, err := got.Block().RawBytes()
-			assert.Nil(err)
+			if got := err; got != nil {
+				t.Errorf("err = %v, want nil", got)
+			}
 			b, err := io.ReadAll(r)
-			assert.Nil(err)
-			assert.Equal(tt.want.data, string(b))
+			if got := err; got != nil {
+				t.Errorf("err = %v, want nil", got)
+			}
+			if got, want := string(b), tt.want.data; got != want {
+				t.Errorf("string(b) = %#v, want %#v", got, want)
+			}
 
-			assert.Equal(tt.want.cached, got.Block().IsCached())
+			if got, want := got.Block().IsCached(), tt.want.cached; got != want {
+				t.Errorf("got.Block().IsCached() = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -528,9 +577,15 @@ func Test_warcRecord_RecordId(t *testing.T) {
 					&nameValue{Name: ContentType, Value: ApplicationWarcFields},
 					&nameValue{Name: ContentLength, Value: "0"},
 				}, "")
-			defer func() { assert.NoError(t, record.Close()) }()
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
-			assert.Equal(t, tt.wantID, record.RecordId())
+			if got, want := record.RecordId(), tt.wantID; got != want {
+				t.Errorf("record.RecordId() = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -555,14 +610,24 @@ func Test_warcRecord_ContentLength(t *testing.T) {
 					&nameValue{Name: ContentType, Value: ApplicationWarcFields},
 					&nameValue{Name: ContentLength, Value: fmt.Sprintf("%d", len(tt.content))},
 				}, tt.content)
-			defer func() { assert.NoError(t, record.Close()) }()
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
 			got, err := record.ContentLength()
 			if tt.wantErr {
-				assert.Error(t, err)
+				if err == nil {
+					t.Errorf("err: expected an error")
+				}
 			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got, want := got, tt.want; got != want {
+					t.Errorf("got = %#v, want %#v", got, want)
+				}
 			}
 		})
 	}
@@ -587,14 +652,24 @@ func Test_warcRecord_Date(t *testing.T) {
 					&nameValue{Name: ContentType, Value: ApplicationWarcFields},
 					&nameValue{Name: ContentLength, Value: "0"},
 				}, "")
-			defer func() { assert.NoError(t, record.Close()) }()
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
 			got, err := record.Date()
 			if tt.wantErr {
-				assert.Error(t, err)
+				if err == nil {
+					t.Errorf("err: expected an error")
+				}
 			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.wantYear, got.Year())
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got, want := got.Year(), tt.wantYear; got != want {
+					t.Errorf("got.Year() = %#v, want %#v", got, want)
+				}
 			}
 		})
 	}
@@ -613,9 +688,15 @@ func Test_warcVersion_MajorMinor(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.wantMajor, tt.version.Major())
-			assert.Equal(t, tt.wantMinor, tt.version.Minor())
-			assert.Equal(t, tt.wantStr, tt.version.String())
+			if got, want := tt.version.Major(), tt.wantMajor; got != want {
+				t.Errorf("tt.version.Major() = %#v, want %#v", got, want)
+			}
+			if got, want := tt.version.Minor(), tt.wantMinor; got != want {
+				t.Errorf("tt.version.Minor() = %#v, want %#v", got, want)
+			}
+			if got, want := tt.version.String(), tt.wantStr; got != want {
+				t.Errorf("tt.version.String() = %#v, want %#v", got, want)
+			}
 		})
 	}
 }
@@ -766,16 +847,26 @@ func Test_warcRecord_Merge_ErrorPaths(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := tt.record()
-			defer func() { assert.NoError(t, rec.Close()) }()
+			defer func() {
+				if err := rec.Close(); err != nil {
+					t.Errorf("rec.Close() error = %v", err)
+				}
+			}()
 			refs := tt.refs()
 			defer func() {
 				for _, r := range refs {
-					assert.NoError(t, r.Close())
+					if err := r.Close(); err != nil {
+						t.Errorf("r.Close() error = %v", err)
+					}
 				}
 			}()
 			_, err := rec.Merge(refs...)
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErr)
+			if err == nil {
+				t.Fatalf("err: expected an error")
+			}
+			if got, want := err.Error(), tt.wantErr; !strings.Contains(got, want) {
+				t.Errorf("err.Error() = %v, want to contain %v", got, want)
+			}
 		})
 	}
 }
@@ -791,7 +882,11 @@ func Test_warcRecord_Merge_WithRequestBlock(t *testing.T) {
 		&nameValue{Name: WarcRefersTo, Value: "<urn:uuid:fff0cecc-0221-11e7-adb1-0242ac120008>"},
 		&nameValue{Name: WarcTruncated, Value: "length"},
 	}, "GET / HTTP/1.0\nHost: example.com\nUser-Agent: TestBot/1.0\nAccept: text/html\n\n")
-	defer func() { assert.NoError(t, revisitRecord.Close()) }()
+	defer func() {
+		if err := revisitRecord.Close(); err != nil {
+			t.Errorf("revisitRecord.Close() error = %v", err)
+		}
+	}()
 
 	referencedRecord := createRecord1(Request, &WarcFields{
 		&nameValue{Name: WarcTargetURI, Value: "http://example.com"},
@@ -800,12 +895,22 @@ func Test_warcRecord_Merge_WithRequestBlock(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "application/http;msgtype=request"},
 		&nameValue{Name: ContentLength, Value: "69"},
 	}, "GET / HTTP/1.0\nHost: example.com\nUser-Agent: OldBot/1.0\nAccept: */*\n\n")
-	defer func() { assert.NoError(t, referencedRecord.Close()) }()
+	defer func() {
+		if err := referencedRecord.Close(); err != nil {
+			t.Errorf("referencedRecord.Close() error = %v", err)
+		}
+	}()
 
 	got, err := revisitRecord.Merge(referencedRecord)
-	require.NoError(t, err)
-	assert.Equal(t, Request, got.Type())
-	assert.IsType(t, &httpRequestBlock{}, got.Block())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := got.Type(), Request; got != want {
+		t.Errorf("got.Type() = %#v, want %#v", got, want)
+	}
+	if _, ok := got.Block().(*httpRequestBlock); !ok {
+		t.Errorf("block type = %T, want *httpRequestBlock", got.Block())
+	}
 }
 
 func Test_warcRecord_ToRevisitRecord_Errors(t *testing.T) {
@@ -837,12 +942,20 @@ func Test_warcRecord_ToRevisitRecord_Errors(t *testing.T) {
 			}, "HTTP/1.1 200 OK\nDate: Tue, 19 Sep 2016 17:18:40 GMT\nServer: Apache/2.0.54 (Ubuntu)\n"+
 				"Last-Modified: Mon, 16 Jun 2013 22:28:51 GMT\nETag: \"3e45-67e-2ed02ec0\"\nAccept-Ranges: bytes\n"+
 				"Content-Length: 19\nConnection: close\nContent-Type: text/plain\n\nThis is the content")
-			defer func() { assert.NoError(t, record.Close()) }()
+			defer func() {
+				if err := record.Close(); err != nil {
+					t.Errorf("record.Close() error = %v", err)
+				}
+			}()
 
 			_ = record.Block().Cache()
 			_, err := record.ToRevisitRecord(tt.ref)
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErr)
+			if err == nil {
+				t.Fatalf("err: expected an error")
+			}
+			if got, want := err.Error(), tt.wantErr; !strings.Contains(got, want) {
+				t.Errorf("err.Error() = %v, want to contain %v", got, want)
+			}
 		})
 	}
 }
@@ -854,11 +967,19 @@ func Test_warcRecord_RevisitRef_NonRevisit(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "text/plain"},
 		&nameValue{Name: ContentLength, Value: "0"},
 	}, "")
-	defer func() { assert.NoError(t, record.Close()) }()
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	_, err := record.RevisitRef()
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrNotRevisitRecord)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if got, want := err, ErrNotRevisitRecord; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func Test_warcRecord_CreateRevisitRef_FromRevisit(t *testing.T) {
@@ -869,11 +990,19 @@ func Test_warcRecord_CreateRevisitRef_FromRevisit(t *testing.T) {
 		&nameValue{Name: ContentLength, Value: "0"},
 		&nameValue{Name: WarcProfile, Value: ProfileServerNotModifiedV1_1},
 	}, "")
-	defer func() { assert.NoError(t, record.Close()) }()
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	_, err := record.CreateRevisitRef(ProfileServerNotModifiedV1_1)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrIsRevisitRecord)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if got, want := err, ErrIsRevisitRecord; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func Test_warcRecord_ValidateDigest_Paths(t *testing.T) {
@@ -890,15 +1019,27 @@ func Test_warcRecord_ValidateDigest_Paths(t *testing.T) {
 		rb.AddWarcHeader(ContentType, "text/plain")
 		rb.AddWarcHeader(ContentLength, "999") // wrong length
 		_, err := rb.WriteString("Hello")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		wr, v, err := rb.Build()
-		require.NoError(t, err)
-		defer func() { assert.NoError(t, wr.Close()) }()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		defer func() {
+			if err := wr.Close(); err != nil {
+				t.Errorf("wr.Close() error = %v", err)
+			}
+		}()
 		// Validation should have content length mismatch warning
-		assert.NotEmpty(t, v)
+		if got := v; len(got) == 0 {
+			t.Errorf("v = %v, want nonempty", got)
+		}
 		// Content-Length should be fixed
 		cl, _ := wr.ContentLength()
-		assert.Equal(t, int64(5), cl)
+		if got, want := cl, int64(5); got != want {
+			t.Errorf("cl = %#v, want %#v", got, want)
+		}
 	})
 
 	t.Run("content length mismatch ErrFail", func(t *testing.T) {
@@ -913,10 +1054,16 @@ func Test_warcRecord_ValidateDigest_Paths(t *testing.T) {
 		rb.AddWarcHeader(ContentType, "text/plain")
 		rb.AddWarcHeader(ContentLength, "999")
 		_, err := rb.WriteString("Hello")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		_, _, err = rb.Build()
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "content length mismatch")
+		if err == nil {
+			t.Fatalf("err: expected an error")
+		}
+		if got, want := err.Error(), "content length mismatch"; !strings.Contains(got, want) {
+			t.Errorf("err.Error() = %v, want to contain %v", got, want)
+		}
 	})
 }
 
@@ -928,9 +1075,13 @@ func Test_warcRecord_Close_NilCloser(t *testing.T) {
 		&nameValue{Name: ContentLength, Value: "0"},
 	}, "")
 	// First close
-	assert.NoError(t, record.Close())
+	if err := record.Close(); err != nil {
+		t.Errorf("record.Close() error = %v", err)
+	}
 	// Second close should also be fine (closer is nil)
-	assert.NoError(t, record.Close())
+	if err := record.Close(); err != nil {
+		t.Errorf("record.Close() error = %v", err)
+	}
 }
 
 func Test_warcRecord_String_Format(t *testing.T) {
@@ -940,12 +1091,22 @@ func Test_warcRecord_String_Format(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "text/plain"},
 		&nameValue{Name: ContentLength, Value: "5"},
 	}, "Hello")
-	defer func() { assert.NoError(t, record.Close()) }()
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 
 	s := record.String()
-	assert.Contains(t, s, "WARC record")
-	assert.Contains(t, s, "response")
-	assert.Contains(t, s, "00000000-0000-0000-0000-000000000001")
+	if got, want := s, "WARC record"; !strings.Contains(got, want) {
+		t.Errorf("s = %v, want to contain %v", got, want)
+	}
+	if got, want := s, "response"; !strings.Contains(got, want) {
+		t.Errorf("s = %v, want to contain %v", got, want)
+	}
+	if got, want := s, "00000000-0000-0000-0000-000000000001"; !strings.Contains(got, want) {
+		t.Errorf("s = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_warcRecord_ToRevisitRecord_WithTargetUriAndDate(t *testing.T) {
@@ -959,9 +1120,15 @@ func Test_warcRecord_ToRevisitRecord_WithTargetUriAndDate(t *testing.T) {
 	}, "HTTP/1.1 200 OK\nDate: Tue, 19 Sep 2016 17:18:40 GMT\nServer: Apache/2.0.54 (Ubuntu)\n"+
 		"Last-Modified: Mon, 16 Jun 2013 22:28:51 GMT\nETag: \"3e45-67e-2ed02ec0\"\nAccept-Ranges: bytes\n"+
 		"Content-Length: 19\nConnection: close\nContent-Type: text/plain\n\nThis is the content")
-	defer func() { assert.NoError(t, record.Close()) }()
+	defer func() {
+		if err := record.Close(); err != nil {
+			t.Errorf("record.Close() error = %v", err)
+		}
+	}()
 	err := record.Block().Cache()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	ref := &RevisitRef{
 		Profile:        ProfileIdenticalPayloadDigestV1_0,
@@ -970,15 +1137,25 @@ func Test_warcRecord_ToRevisitRecord_WithTargetUriAndDate(t *testing.T) {
 		TargetDate:     "2017-03-06T04:03:53Z",
 	}
 	revisit, err := record.ToRevisitRecord(ref)
-	require.NoError(t, err)
-	assert.Equal(t, Revisit, revisit.Type())
-	assert.Equal(t, "http://example.com", revisit.WarcHeader().Get(WarcRefersToTargetURI))
-	assert.Equal(t, "2017-03-06T04:03:53Z", revisit.WarcHeader().Get(WarcRefersToDate))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := revisit.Type(), Revisit; got != want {
+		t.Errorf("revisit.Type() = %#v, want %#v", got, want)
+	}
+	if got, want := revisit.WarcHeader().Get(WarcRefersToTargetURI), "http://example.com"; got != want {
+		t.Errorf("revisit.WarcHeader().Get(WarcRefersToTargetURI) = %#v, want %#v", got, want)
+	}
+	if got, want := revisit.WarcHeader().Get(WarcRefersToDate), "2017-03-06T04:03:53Z"; got != want {
+		t.Errorf("revisit.WarcHeader().Get(WarcRefersToDate) = %#v, want %#v", got, want)
+	}
 }
 
 func Test_RecordType_String_Unknown(t *testing.T) {
 	rt := RecordType(255)
-	assert.Equal(t, "unknown", rt.String())
+	if got, want := rt.String(), "unknown"; got != want {
+		t.Errorf("rt.String() = %#v, want %#v", got, want)
+	}
 }
 
 func Test_warcRecord_Merge_ParseHeadersError_Response(t *testing.T) {
@@ -992,7 +1169,11 @@ func Test_warcRecord_Merge_ParseHeadersError_Response(t *testing.T) {
 		&nameValue{Name: WarcProfile, Value: ProfileServerNotModifiedV1_1},
 		&nameValue{Name: WarcRefersTo, Value: "<urn:uuid:fff0cecc-0221-11e7-adb1-0242ac120008>"},
 	}, "GARBAGE NOT HTTP\r\n\r\n\n")
-	defer func() { assert.NoError(t, revisitRecord.Close()) }()
+	defer func() {
+		if err := revisitRecord.Close(); err != nil {
+			t.Errorf("revisitRecord.Close() error = %v", err)
+		}
+	}()
 
 	// Reference record with valid response block
 	referencedRecord := createRecord1(Response, &WarcFields{
@@ -1002,15 +1183,23 @@ func Test_warcRecord_Merge_ParseHeadersError_Response(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
 		&nameValue{Name: ContentLength, Value: "64"},
 	}, "HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: 4\n\ntest")
-	defer func() { assert.NoError(t, referencedRecord.Close()) }()
+	defer func() {
+		if err := referencedRecord.Close(); err != nil {
+			t.Errorf("referencedRecord.Close() error = %v", err)
+		}
+	}()
 
 	// With ErrWarn syntax policy (from createRecord1), the merge should attempt CRLF append retry
 	got, err := revisitRecord.Merge(referencedRecord)
 	// The malformed headers will fail parseHeaders — since errSyntax is ErrWarn (not > ErrWarn),
 	// it goes to the retry path with CRLF appended. That'll still fail.
 	// The second parseHeaders error returns wr, err.
-	assert.NotNil(t, got)
-	assert.Error(t, err)
+	if got == nil {
+		t.Errorf("got = %v, want non-nil", got)
+	}
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func Test_warcRecord_Merge_ParseHeadersError_Request(t *testing.T) {
@@ -1024,7 +1213,11 @@ func Test_warcRecord_Merge_ParseHeadersError_Request(t *testing.T) {
 		&nameValue{Name: WarcProfile, Value: ProfileServerNotModifiedV1_1},
 		&nameValue{Name: WarcRefersTo, Value: "<urn:uuid:fff0cecc-0221-11e7-adb1-0242ac120008>"},
 	}, "GARBAGE NOT HTTP\r\n\r\n\n")
-	defer func() { assert.NoError(t, revisitRecord.Close()) }()
+	defer func() {
+		if err := revisitRecord.Close(); err != nil {
+			t.Errorf("revisitRecord.Close() error = %v", err)
+		}
+	}()
 
 	// Reference record with valid request block — need correct content length
 	reqContent := "GET / HTTP/1.0\nHost: example.com\n\ndata"
@@ -1035,11 +1228,19 @@ func Test_warcRecord_Merge_ParseHeadersError_Request(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "application/http;msgtype=request"},
 		&nameValue{Name: ContentLength, Value: fmt.Sprintf("%d", len(reqContent))},
 	}, reqContent)
-	defer func() { assert.NoError(t, referencedRecord.Close()) }()
+	defer func() {
+		if err := referencedRecord.Close(); err != nil {
+			t.Errorf("referencedRecord.Close() error = %v", err)
+		}
+	}()
 
 	got, err := revisitRecord.Merge(referencedRecord)
-	assert.NotNil(t, got)
-	assert.Error(t, err)
+	if got == nil {
+		t.Errorf("got = %v, want non-nil", got)
+	}
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func Test_warcRecord_Merge_ParseHeadersError_ErrFail(t *testing.T) {
@@ -1057,8 +1258,14 @@ func Test_warcRecord_Merge_ParseHeadersError_ErrFail(t *testing.T) {
 	rb.AddWarcHeader(WarcRefersTo, "<urn:uuid:fff0cecc-0221-11e7-adb1-0242ac120008>")
 	_, _ = rb.WriteString("GARBAGE NOT HTTP\r\n\r\n\n")
 	revisitRecord, _, err := rb.Build()
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, revisitRecord.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := revisitRecord.Close(); err != nil {
+			t.Errorf("revisitRecord.Close() error = %v", err)
+		}
+	}()
 
 	referencedRecord := createRecord1(Response, &WarcFields{
 		&nameValue{Name: WarcTargetURI, Value: "http://example.com"},
@@ -1067,12 +1274,20 @@ func Test_warcRecord_Merge_ParseHeadersError_ErrFail(t *testing.T) {
 		&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
 		&nameValue{Name: ContentLength, Value: "64"},
 	}, "HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: 4\n\ntest")
-	defer func() { assert.NoError(t, referencedRecord.Close()) }()
+	defer func() {
+		if err := referencedRecord.Close(); err != nil {
+			t.Errorf("referencedRecord.Close() error = %v", err)
+		}
+	}()
 
 	// errSyntax=ErrFail, so first parseHeaders error returns immediately
 	got, err := revisitRecord.Merge(referencedRecord)
-	assert.NotNil(t, got)
-	assert.Error(t, err)
+	if got == nil {
+		t.Errorf("got = %v, want non-nil", got)
+	}
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
@@ -1090,7 +1305,11 @@ func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
 	}, "HTTP/1.1 200 OK\nDate: Tue, 19 Sep 2016 17:18:40 GMT\nServer: Apache/2.0.54 (Ubuntu)\n"+
 		"Last-Modified: Mon, 16 Jun 2013 22:28:51 GMT\nETag: \"3e45-67e-2ed02ec0\"\nAccept-Ranges: bytes\n"+
 		"Content-Length: 19\nConnection: close\nContent-Type: text/plain\n\nThis is the content")
-	defer func() { assert.NoError(t, revisitRecord.Close()) }()
+	defer func() {
+		if err := revisitRecord.Close(); err != nil {
+			t.Errorf("revisitRecord.Close() error = %v", err)
+		}
+	}()
 
 	// Build a raw WARC record and unmarshal from a non-seekable reader to get an uncached block.
 	// NopCloser wraps the reader WITHOUT io.Seeker, so httpResponseBlock.IsCached() returns false.
@@ -1113,17 +1332,31 @@ func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
 		WithSyntaxErrorPolicy(ErrIgnore),
 	)
 	referencedRecord, _, _, err := u.Unmarshal(bufio.NewReader(nonSeekableReader))
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, referencedRecord.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := referencedRecord.Close(); err != nil {
+			t.Errorf("referencedRecord.Close() error = %v", err)
+		}
+	}()
 
 	// Confirm the block is NOT cached (non-seekable stream)
-	assert.False(t, referencedRecord.Block().IsCached())
+	if got := referencedRecord.Block().IsCached(); got {
+		t.Errorf("referencedRecord.Block().IsCached() = %v, want false", got)
+	}
 
 	got, err := revisitRecord.Merge(referencedRecord)
-	require.NoError(t, err)
-	assert.Equal(t, Response, got.Type())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := got.Type(), Response; got != want {
+		t.Errorf("got.Type() = %#v, want %#v", got, want)
+	}
 	// WarcBlockDigest should have been deleted since ref block wasn't cached
-	assert.False(t, got.WarcHeader().Has(WarcBlockDigest))
+	if got := got.WarcHeader().Has(WarcBlockDigest); got {
+		t.Errorf("got.WarcHeader().Has(WarcBlockDigest) = %v, want false", got)
+	}
 }
 
 func Test_warcRecord_ValidateDigest_WrongPayloadDigest(t *testing.T) {
@@ -1133,7 +1366,9 @@ func Test_warcRecord_ValidateDigest_WrongPayloadDigest(t *testing.T) {
 		WithFixDigest(false), WithAddMissingDigest(false),
 		WithDefaultDigestEncoding(Base16))
 	_, err := builder.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ntest")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	builder.AddWarcHeader(WarcRecordID, "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>")
 	builder.AddWarcHeader(WarcDate, "2006-01-02T15:04:05Z")
 	builder.AddWarcHeader(ContentType, "application/http;msgtype=response")
@@ -1141,10 +1376,18 @@ func Test_warcRecord_ValidateDigest_WrongPayloadDigest(t *testing.T) {
 	builder.AddWarcHeader(WarcPayloadDigest, "sha1:0000000000000000000000000000000000000000")
 
 	rec, v, err := builder.Build()
-	require.NoError(t, err) // ErrWarn should not fail
-	defer func() { assert.NoError(t, rec.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	} // ErrWarn should not fail
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
 	// Validation should contain the wrong payload digest error
-	assert.NotEmpty(t, v)
+	if got := v; len(got) == 0 {
+		t.Errorf("v = %v, want nonempty", got)
+	}
 	found := false
 	for _, e := range v {
 		if e != nil {
@@ -1154,7 +1397,9 @@ func Test_warcRecord_ValidateDigest_WrongPayloadDigest(t *testing.T) {
 			}
 		}
 	}
-	assert.True(t, found, "expected validation errors for wrong payload digest")
+	if got := found; !got {
+		t.Errorf("found = %v, want true: %s", got, "expected validation errors for wrong payload digest")
+	}
 }
 
 func Test_warcRecord_ValidateDigest_FixDigest(t *testing.T) {
@@ -1164,7 +1409,9 @@ func Test_warcRecord_ValidateDigest_FixDigest(t *testing.T) {
 		WithFixDigest(true), WithAddMissingDigest(false),
 		WithDefaultDigestEncoding(Base16))
 	_, err := builder.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ntest")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	builder.AddWarcHeader(WarcRecordID, "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>")
 	builder.AddWarcHeader(WarcDate, "2006-01-02T15:04:05Z")
 	builder.AddWarcHeader(ContentType, "application/http;msgtype=response")
@@ -1173,12 +1420,22 @@ func Test_warcRecord_ValidateDigest_FixDigest(t *testing.T) {
 	builder.AddWarcHeader(WarcPayloadDigest, "sha1:0000000000000000000000000000000000000000")
 
 	rec, _, err := builder.Build()
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
 
 	// Digests should have been fixed by the builder
-	assert.NotEqual(t, "sha1:0000000000000000000000000000000000000000", rec.WarcHeader().Get(WarcBlockDigest))
-	assert.NotEqual(t, "sha1:0000000000000000000000000000000000000000", rec.WarcHeader().Get(WarcPayloadDigest))
+	if got, want := rec.WarcHeader().Get(WarcBlockDigest), "sha1:0000000000000000000000000000000000000000"; got == want {
+		t.Errorf("rec.WarcHeader().Get(WarcBlockDigest) = %#v, must differ from %#v", got, want)
+	}
+	if got, want := rec.WarcHeader().Get(WarcPayloadDigest), "sha1:0000000000000000000000000000000000000000"; got == want {
+		t.Errorf("rec.WarcHeader().Get(WarcPayloadDigest) = %#v, must differ from %#v", got, want)
+	}
 }
 
 func Test_warcRecord_ValidateDigest_FixContentLength(t *testing.T) {
@@ -1188,19 +1445,31 @@ func Test_warcRecord_ValidateDigest_FixContentLength(t *testing.T) {
 		WithFixDigest(false), WithAddMissingDigest(false),
 		WithFixContentLength(true), WithDefaultDigestEncoding(Base16))
 	_, err := builder.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ntest")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	builder.AddWarcHeader(WarcRecordID, "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>")
 	builder.AddWarcHeader(WarcDate, "2006-01-02T15:04:05Z")
 	builder.AddWarcHeader(ContentType, "application/http;msgtype=response")
 	builder.AddWarcHeader(ContentLength, "999") // deliberately wrong
 
 	rec, v, err := builder.Build()
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
 
 	// Content length should have been fixed
-	assert.NotEmpty(t, v) // should have the mismatch warning
-	assert.Equal(t, "42", rec.WarcHeader().Get(ContentLength))
+	if got := v; len(got) == 0 {
+		t.Errorf("v = %v, want nonempty", got)
+	} // should have the mismatch warning
+	if got, want := rec.WarcHeader().Get(ContentLength), "42"; got != want {
+		t.Errorf("rec.WarcHeader().Get(ContentLength) = %#v, want %#v", got, want)
+	}
 }
 
 func Test_warcRecord_ValidateDigest_PayloadDigest_ErrFail(t *testing.T) {
@@ -1210,7 +1479,9 @@ func Test_warcRecord_ValidateDigest_PayloadDigest_ErrFail(t *testing.T) {
 		WithFixDigest(false), WithAddMissingDigest(false),
 		WithDefaultDigestEncoding(Base16))
 	_, err := builder.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ntest")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	builder.AddWarcHeader(WarcRecordID, "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>")
 	builder.AddWarcHeader(WarcDate, "2006-01-02T15:04:05Z")
 	builder.AddWarcHeader(ContentType, "application/http;msgtype=response")
@@ -1218,8 +1489,12 @@ func Test_warcRecord_ValidateDigest_PayloadDigest_ErrFail(t *testing.T) {
 	builder.AddWarcHeader(WarcPayloadDigest, "sha1:0000000000000000000000000000000000000000")
 
 	_, _, err = builder.Build()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "payload")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "payload"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_warcRecord_ValidateDigest_ContentLengthMismatch_ErrFail(t *testing.T) {
@@ -1229,15 +1504,21 @@ func Test_warcRecord_ValidateDigest_ContentLengthMismatch_ErrFail(t *testing.T) 
 		WithFixDigest(false), WithAddMissingDigest(false),
 		WithDefaultDigestEncoding(Base16))
 	_, err := builder.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ntest")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	builder.AddWarcHeader(WarcRecordID, "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>")
 	builder.AddWarcHeader(WarcDate, "2006-01-02T15:04:05Z")
 	builder.AddWarcHeader(ContentType, "application/http;msgtype=response")
 	builder.AddWarcHeader(ContentLength, "999") // deliberately wrong
 
 	_, _, err = builder.Build()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "content length mismatch")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "content length mismatch"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_warcRecord_ValidateDigest_AddMissingPayloadDigest(t *testing.T) {
@@ -1247,7 +1528,9 @@ func Test_warcRecord_ValidateDigest_AddMissingPayloadDigest(t *testing.T) {
 		WithFixDigest(false), WithAddMissingDigest(true),
 		WithDefaultDigestEncoding(Base16))
 	_, err := builder.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ntest")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	builder.AddWarcHeader(WarcRecordID, "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>")
 	builder.AddWarcHeader(WarcDate, "2006-01-02T15:04:05Z")
 	builder.AddWarcHeader(ContentType, "application/http;msgtype=response")
@@ -1255,12 +1538,22 @@ func Test_warcRecord_ValidateDigest_AddMissingPayloadDigest(t *testing.T) {
 	// Deliberately NOT adding WarcPayloadDigest
 
 	rec, _, err := builder.Build()
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
 
 	// addMissingDigest should have added both block and payload digests
-	assert.NotEmpty(t, rec.WarcHeader().Get(WarcBlockDigest))
-	assert.NotEmpty(t, rec.WarcHeader().Get(WarcPayloadDigest))
+	if got := rec.WarcHeader().Get(WarcBlockDigest); len(got) == 0 {
+		t.Errorf("rec.WarcHeader().Get(WarcBlockDigest) = %v, want nonempty", got)
+	}
+	if got := rec.WarcHeader().Get(WarcPayloadDigest); len(got) == 0 {
+		t.Errorf("rec.WarcHeader().Get(WarcPayloadDigest) = %v, want nonempty", got)
+	}
 }
 
 func Test_warcRecord_parseBlock_BadDigestAlgorithm(t *testing.T) {
@@ -1276,8 +1569,12 @@ func Test_warcRecord_parseBlock_BadDigestAlgorithm(t *testing.T) {
 	rb.AddWarcHeader(WarcBlockDigest, "blake2:abc")
 
 	_, _, err := rb.Build()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported digest algorithm")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "unsupported digest algorithm"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_warcRecord_parseBlock_BadPayloadDigestAlgorithm(t *testing.T) {
@@ -1292,6 +1589,10 @@ func Test_warcRecord_parseBlock_BadPayloadDigestAlgorithm(t *testing.T) {
 	rb.AddWarcHeader(WarcPayloadDigest, "blake2:abc")
 
 	_, _, err := rb.Build()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported digest algorithm")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "unsupported digest algorithm"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }

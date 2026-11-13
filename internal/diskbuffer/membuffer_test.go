@@ -2,54 +2,82 @@ package diskbuffer
 
 import (
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMemBuffer_SizeAndLimit(t *testing.T) {
 	m := newMemBuffer(100, 16)
-	assert.Equal(t, int64(0), m.Size())
-	assert.Equal(t, int64(100), m.Limit())
-	assert.True(t, m.hasSpace())
+	if got, want := m.Size(), int64(0); got != want {
+		t.Errorf("m.Size() = %#v, want %#v", got, want)
+	}
+	if got, want := m.Limit(), int64(100); got != want {
+		t.Errorf("m.Limit() = %#v, want %#v", got, want)
+	}
+	if got := m.hasSpace(); !got {
+		t.Errorf("m.hasSpace() = %v, want true", got)
+	}
 
 	m.write([]byte("hello"))
-	assert.Equal(t, int64(5), m.Size())
-	assert.Equal(t, "hello", string(m.bytes()))
+	if got, want := m.Size(), int64(5); got != want {
+		t.Errorf("m.Size() = %#v, want %#v", got, want)
+	}
+	if got, want := string(m.bytes()), "hello"; got != want {
+		t.Errorf("string(m.bytes()) = %#v, want %#v", got, want)
+	}
 }
 
 func TestMemBuffer_Full(t *testing.T) {
 	m := newMemBuffer(5, 5)
 	m.write([]byte("12345"))
-	assert.False(t, m.hasSpace())
+	if got := m.hasSpace(); got {
+		t.Errorf("m.hasSpace() = %v, want false", got)
+	}
 
 	// Writing more returns 0
 	n := m.write([]byte("x"))
-	assert.Equal(t, 0, n)
+	if got, want := n, 0; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
 }
 
 func TestMemBuffer_WriteString(t *testing.T) {
 	m := newMemBuffer(10, 4)
 	n := m.writeString("hello")
-	assert.Equal(t, 5, n)
-	assert.Equal(t, "hello", string(m.bytes()))
+	if got, want := n, 5; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := string(m.bytes()), "hello"; got != want {
+		t.Errorf("string(m.bytes()) = %#v, want %#v", got, want)
+	}
 
 	// Write more than free space — should be truncated
 	n = m.writeString("world!")
-	assert.Equal(t, 5, n) // only 5 bytes free
-	assert.Equal(t, "helloworld", string(m.bytes()))
+	if got, want := n, 5; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	} // only 5 bytes free
+	if got, want := string(m.bytes()), "helloworld"; got != want {
+		t.Errorf("string(m.bytes()) = %#v, want %#v", got, want)
+	}
 }
 
 func TestMemBuffer_NewWithEdgeCases(t *testing.T) {
 	// Negative limit → 0
 	m := newMemBuffer(-1, 0)
-	assert.Equal(t, int64(0), m.Limit())
+	if got, want := m.Limit(), int64(0); got != want {
+		t.Errorf("m.Limit() = %#v, want %#v", got, want)
+	}
 
 	// Negative initial cap
 	m = newMemBuffer(100, -1)
-	assert.Equal(t, int64(100), m.Limit())
+	if got, want := m.Limit(), int64(100); got != want {
+		t.Errorf("m.Limit() = %#v, want %#v", got, want)
+	}
 
 	// Hint > limit → capped to limit
 	m = newMemBuffer(10, 20)
-	assert.Equal(t, int64(10), m.Limit())
-	assert.LessOrEqual(t, cap(m.bytes()), 10)
+	if got, want := m.Limit(), int64(10); got != want {
+		t.Errorf("m.Limit() = %#v, want %#v", got, want)
+	}
+	if got, bound := cap(m.bytes()), 10; got > bound {
+		t.Errorf("cap(m.bytes()) = %v, want <= %v", got, bound)
+	}
 }

@@ -22,12 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/klauspost/compress/gzip"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_unmarshaler_Unmarshal(t *testing.T) {
@@ -926,8 +925,6 @@ func Test_unmarshaler_Unmarshal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := assert.New(t)
-			require := require.New(t)
 
 			u := NewUnmarshaler(tt.opts...)
 			data := bufio.NewReader(strings.NewReader(tt.input))
@@ -938,37 +935,65 @@ func Test_unmarshaler_Unmarshal(t *testing.T) {
 			}
 
 			if !tt.wantErr {
-				require.NoError(err1)
+				if err := err1; err != nil {
+					t.Fatalf("err1 error = %v", err)
+				}
 			}
 
-			assert.Equal(tt.want.version, gotRecord.Version(), "Record version")
-			assert.Equal(tt.want.recordType, gotRecord.Type(), "Record type")
-			assert.IsType(tt.want.blockType, gotRecord.Block(), "Block type")
-			assert.Equal(tt.want.cached, gotRecord.Block().IsCached(), "IsCached")
+			if got, want := gotRecord.Version(), tt.want.version; !reflect.DeepEqual(got, want) {
+				t.Errorf("gotRecord.Version() = %#v, want %#v: %s", got, want, "Record version")
+			}
+			if got, want := gotRecord.Type(), tt.want.recordType; got != want {
+				t.Errorf("gotRecord.Type() = %#v, want %#v: %s", got, want, "Record type")
+			}
+			if got, want := gotRecord.Block(), tt.want.blockType; reflect.TypeOf(got) != reflect.TypeOf(want) {
+				t.Errorf("type = %T, want %T: %s", got, want, "Block type")
+			}
+			if got, want := gotRecord.Block().IsCached(), tt.want.cached; got != want {
+				t.Errorf("gotRecord.Block().IsCached() = %#v, want %#v: %s", got, want, "IsCached")
+			}
 
-			assert.ElementsMatch(*tt.want.headers, *gotRecord.(*warcRecord).headers)
+			if got, want := *gotRecord.(*warcRecord).headers, *tt.want.headers; !equalHeaderFields(got, want) {
+				t.Errorf("header fields = %v, want %v (ignoring order)", got, want)
+			}
 			r, err := gotRecord.Block().RawBytes()
-			assert.Nil(err)
+			if got := err; got != nil {
+				t.Errorf("err = %v, want nil", got)
+			}
 			content, err := io.ReadAll(r)
-			assert.Nil(err)
+			if got := err; got != nil {
+				t.Errorf("err = %v, want nil", got)
+			}
 
-			assert.Equal(tt.want.content, string(content), "Content")
-			assert.Equal(tt.wantOffset, gotOffset, "Offset")
+			if got, want := string(content), tt.want.content; got != want {
+				t.Errorf("string(content) = %#v, want %#v: %s", got, want, "Content")
+			}
+			if got, want := gotOffset, tt.wantOffset; got != want {
+				t.Errorf("gotOffset = %#v, want %#v: %s", got, want, "Offset")
+			}
 
 			v2, err2 := gotRecord.ValidateDigest()
 			if !tt.wantErr {
-				require.NoError(err2)
+				if err := err2; err != nil {
+					t.Fatalf("err2 error = %v", err)
+				}
 			}
 			validation = append(validation, v2...)
 
 			err3 := gotRecord.Close()
 			if tt.wantErr {
-				require.Error(errors.Join(err1, err2, err3))
+				if err := errors.Join(err1, err2, err3); err == nil {
+					t.Fatalf("errors.Join(err1, err2, err3): expected an error")
+				}
 			} else {
-				require.NoError(err3)
+				if err := err3; err != nil {
+					t.Fatalf("err3 error = %v", err)
+				}
 			}
 
-			assert.Equal(tt.want.validation, validation, "Want:\n %s\nGot:\n %s", tt.want.validation, fmt.Sprint(validation))
+			if got, want := validation, tt.want.validation; !reflect.DeepEqual(got, want) {
+				t.Errorf("validation = %#v, want %#v: %s", got, want, fmt.Sprintf("Want:\n %s\nGot:\n %s", tt.want.validation, fmt.Sprint(validation)))
+			}
 		})
 	}
 }
@@ -989,8 +1014,12 @@ func Test_unmarshaler_Unmarshal_GarbageBeforeRecord_ErrFail(t *testing.T) {
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail))
 	data := bufio.NewReader(strings.NewReader(input))
 	_, _, _, err := u.Unmarshal(data)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "expected start of record")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "expected start of record"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_unmarshaler_Unmarshal_GarbageBeforeRecord_ErrWarn(t *testing.T) {
@@ -1007,11 +1036,23 @@ func Test_unmarshaler_Unmarshal_GarbageBeforeRecord_ErrWarn(t *testing.T) {
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrWarn))
 	data := bufio.NewReader(strings.NewReader(input))
 	rec, offset, validation, err := u.Unmarshal(data)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.Equal(t, int64(2), offset)
-	assert.False(t, len(validation) == 0)
-	assert.Contains(t, fmt.Sprint(validation), "bytes after expected offset")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got, want := offset, int64(2); got != want {
+		t.Errorf("offset = %#v, want %#v", got, want)
+	}
+	if got := len(validation) == 0; got {
+		t.Errorf("len(validation) == 0 = %v, want false", got)
+	}
+	if got, want := fmt.Sprint(validation), "bytes after expected offset"; !strings.Contains(got, want) {
+		t.Errorf("fmt.Sprint(validation) = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_unmarshaler_Unmarshal_UnsupportedVersion_ErrFail(t *testing.T) {
@@ -1027,8 +1068,12 @@ func Test_unmarshaler_Unmarshal_UnsupportedVersion_ErrFail(t *testing.T) {
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail))
 	data := bufio.NewReader(strings.NewReader(input))
 	_, _, _, err := u.Unmarshal(data)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported WARC version")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "unsupported WARC version"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_unmarshaler_Unmarshal_UnsupportedVersion_ErrWarn(t *testing.T) {
@@ -1045,10 +1090,20 @@ func Test_unmarshaler_Unmarshal_UnsupportedVersion_ErrWarn(t *testing.T) {
 		WithUnknownRecordTypePolicy(ErrIgnore))
 	data := bufio.NewReader(strings.NewReader(input))
 	rec, _, validation, err := u.Unmarshal(data)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.False(t, len(validation) == 0)
-	assert.Contains(t, fmt.Sprint(validation), "unsupported WARC version")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got := len(validation) == 0; got {
+		t.Errorf("len(validation) == 0 = %v, want false", got)
+	}
+	if got, want := fmt.Sprint(validation), "unsupported WARC version"; !strings.Contains(got, want) {
+		t.Errorf("fmt.Sprint(validation) = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_unmarshaler_Unmarshal_MissingCRLF_ErrFail(t *testing.T) {
@@ -1064,8 +1119,12 @@ func Test_unmarshaler_Unmarshal_MissingCRLF_ErrFail(t *testing.T) {
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail))
 	data := bufio.NewReader(strings.NewReader(input))
 	_, _, _, err := u.Unmarshal(data)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing carriage return")
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
+	if got, want := err.Error(), "missing carriage return"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_unmarshaler_Unmarshal_MissingCRLF_ErrWarn(t *testing.T) {
@@ -1081,10 +1140,20 @@ func Test_unmarshaler_Unmarshal_MissingCRLF_ErrWarn(t *testing.T) {
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrWarn))
 	data := bufio.NewReader(strings.NewReader(input))
 	rec, _, validation, err := u.Unmarshal(data)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.False(t, len(validation) == 0)
-	assert.Contains(t, fmt.Sprint(validation), "missing carriage return")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got := len(validation) == 0; got {
+		t.Errorf("len(validation) == 0 = %v, want false", got)
+	}
+	if got, want := fmt.Sprint(validation), "missing carriage return"; !strings.Contains(got, want) {
+		t.Errorf("fmt.Sprint(validation) = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_unmarshaler_Unmarshal_GzipRecord(t *testing.T) {
@@ -1100,16 +1169,30 @@ func Test_unmarshaler_Unmarshal_GzipRecord(t *testing.T) {
 	buf := &bytes.Buffer{}
 	z := gzip.NewWriter(buf)
 	_, err := z.Write([]byte(record))
-	require.NoError(t, err)
-	require.NoError(t, z.Close())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := z.Close(); err != nil {
+		t.Fatalf("z.Close() error = %v", err)
+	}
 
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail))
 	data := bufio.NewReader(bytes.NewReader(buf.Bytes()))
 	rec, _, _, err := u.Unmarshal(data)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.Equal(t, V1_0, rec.Version())
-	assert.Equal(t, Warcinfo, rec.Type())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got, want := rec.Version(), V1_0; !reflect.DeepEqual(got, want) {
+		t.Errorf("rec.Version() = %#v, want %#v", got, want)
+	}
+	if got, want := rec.Type(), Warcinfo; got != want {
+		t.Errorf("rec.Type() = %#v, want %#v", got, want)
+	}
 }
 
 func Test_unmarshaler_Unmarshal_GzipRecord_Reuse(t *testing.T) {
@@ -1136,20 +1219,34 @@ func Test_unmarshaler_Unmarshal_GzipRecord_Reuse(t *testing.T) {
 
 	// First unmarshal creates gz reader
 	rec1, _, _, err := u.Unmarshal(data)
-	require.NoError(t, err)
-	func() { assert.NoError(t, rec1.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	func() {
+		if err := rec1.Close(); err != nil {
+			t.Errorf("rec1.Close() error = %v", err)
+		}
+	}()
 
 	// Second unmarshal reuses gz reader
 	rec2, _, _, err := u.Unmarshal(data)
-	require.NoError(t, err)
-	func() { assert.NoError(t, rec2.Close()) }()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	func() {
+		if err := rec2.Close(); err != nil {
+			t.Errorf("rec2.Close() error = %v", err)
+		}
+	}()
 }
 
 func Test_unmarshaler_Unmarshal_ShortInput(t *testing.T) {
 	u := NewUnmarshaler()
 	data := bufio.NewReader(strings.NewReader("WA"))
 	_, _, _, err := u.Unmarshal(data)
-	require.Error(t, err)
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
 }
 
 func Test_unmarshaler_Unmarshal_MissingVersion(t *testing.T) {
@@ -1158,7 +1255,9 @@ func Test_unmarshaler_Unmarshal_MissingVersion(t *testing.T) {
 	// Pad enough bytes so Peek(5) works
 	data := bufio.NewReader(strings.NewReader(input))
 	_, _, _, err := u.Unmarshal(data)
-	require.Error(t, err)
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
 }
 
 func Test_unmarshaler_Unmarshal_EndOfRecordMarker_Missing(t *testing.T) {
@@ -1174,7 +1273,9 @@ func Test_unmarshaler_Unmarshal_EndOfRecordMarker_Missing(t *testing.T) {
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail))
 	data := bufio.NewReader(strings.NewReader(input))
 	_, _, _, err := u.Unmarshal(data)
-	require.Error(t, err)
+	if err == nil {
+		t.Fatalf("err: expected an error")
+	}
 }
 
 func Test_unmarshaler_Unmarshal_EndOfRecordMarker_LFOnly(t *testing.T) {
@@ -1190,10 +1291,20 @@ func Test_unmarshaler_Unmarshal_EndOfRecordMarker_LFOnly(t *testing.T) {
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrWarn), WithSyntaxErrorPolicy(ErrWarn))
 	data := bufio.NewReader(strings.NewReader(input))
 	rec, _, validation, err := u.Unmarshal(data)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.False(t, len(validation) == 0)
-	assert.Contains(t, fmt.Sprint(validation), "missing carriage return in end of record marker")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got := len(validation) == 0; got {
+		t.Errorf("len(validation) == 0 = %v, want false", got)
+	}
+	if got, want := fmt.Sprint(validation), "missing carriage return in end of record marker"; !strings.Contains(got, want) {
+		t.Errorf("fmt.Sprint(validation) = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_unmarshaler_Unmarshal_EndOfRecordMarker_LFLFOnly(t *testing.T) {
@@ -1209,10 +1320,20 @@ func Test_unmarshaler_Unmarshal_EndOfRecordMarker_LFLFOnly(t *testing.T) {
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrWarn), WithSyntaxErrorPolicy(ErrWarn))
 	data := bufio.NewReader(strings.NewReader(input))
 	rec, _, validation, err := u.Unmarshal(data)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.False(t, len(validation) == 0)
-	assert.Contains(t, fmt.Sprint(validation), "missing carriage return in end of record marker")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got := len(validation) == 0; got {
+		t.Errorf("len(validation) == 0 = %v, want false", got)
+	}
+	if got, want := fmt.Sprint(validation), "missing carriage return in end of record marker"; !strings.Contains(got, want) {
+		t.Errorf("fmt.Sprint(validation) = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_unmarshaler_Unmarshal_EndOfRecordMarker_TooFewBytes(t *testing.T) {
@@ -1228,10 +1349,20 @@ func Test_unmarshaler_Unmarshal_EndOfRecordMarker_TooFewBytes(t *testing.T) {
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrWarn), WithSyntaxErrorPolicy(ErrWarn))
 	data := bufio.NewReader(strings.NewReader(input))
 	rec, _, validation, err := u.Unmarshal(data)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.False(t, len(validation) == 0)
-	assert.Contains(t, fmt.Sprint(validation), "too few bytes in end of record marker")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got := len(validation) == 0; got {
+		t.Errorf("len(validation) == 0 = %v, want false", got)
+	}
+	if got, want := fmt.Sprint(validation), "too few bytes in end of record marker"; !strings.Contains(got, want) {
+		t.Errorf("fmt.Sprint(validation) = %v, want to contain %v", got, want)
+	}
 }
 
 func BenchmarkUnmarshaler_Unmarshal_compressed(b *testing.B) {
@@ -1271,7 +1402,9 @@ func Test_Unmarshal_CorruptGzip(t *testing.T) {
 	corruptGzip := []byte{0x1f, 0x8b, 0x08, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrIgnore), WithSyntaxErrorPolicy(ErrIgnore))
 	_, _, _, err := u.Unmarshal(bufio.NewReader(bytes.NewReader(corruptGzip)))
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func Test_Unmarshal_GzipNonWARCContent(t *testing.T) {
@@ -1283,8 +1416,12 @@ func Test_Unmarshal_GzipNonWARCContent(t *testing.T) {
 
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrIgnore), WithSyntaxErrorPolicy(ErrIgnore))
 	_, _, _, err := u.Unmarshal(bufio.NewReader(&buf))
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "missing record version")
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if got, want := err.Error(), "missing record version"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_Unmarshal_MissingCR_ErrFail(t *testing.T) {
@@ -1300,8 +1437,12 @@ func Test_Unmarshal_MissingCR_ErrFail(t *testing.T) {
 
 	u := NewUnmarshaler(WithSyntaxErrorPolicy(ErrFail))
 	_, _, _, err := u.Unmarshal(bufio.NewReader(strings.NewReader(record)))
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "missing carriage return")
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if got, want := err.Error(), "missing carriage return"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func Test_Unmarshal_MissingCR_ErrWarn(t *testing.T) {
@@ -1317,9 +1458,17 @@ func Test_Unmarshal_MissingCR_ErrWarn(t *testing.T) {
 
 	u := NewUnmarshaler(WithSyntaxErrorPolicy(ErrWarn), WithSpecViolationPolicy(ErrIgnore))
 	rec, _, v, err := u.Unmarshal(bufio.NewReader(strings.NewReader(record)))
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.NotEmpty(t, v) // Should have a validation warning about missing CR
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got := v; len(got) == 0 {
+		t.Errorf("v = %v, want nonempty", got)
+	} // Should have a validation warning about missing CR
 }
 
 func Test_Unmarshal_EndOfRecordMarker_SingleLF(t *testing.T) {
@@ -1335,9 +1484,17 @@ func Test_Unmarshal_EndOfRecordMarker_SingleLF(t *testing.T) {
 
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrWarn), WithSyntaxErrorPolicy(ErrIgnore))
 	rec, _, v, err := u.Unmarshal(bufio.NewReader(strings.NewReader(record)))
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.NotEmpty(t, v) // validation should flag the bad marker
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got := v; len(got) == 0 {
+		t.Errorf("v = %v, want nonempty", got)
+	} // validation should flag the bad marker
 }
 
 func Test_Unmarshal_EndOfRecordMarker_DoubleLF(t *testing.T) {
@@ -1353,9 +1510,17 @@ func Test_Unmarshal_EndOfRecordMarker_DoubleLF(t *testing.T) {
 
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrWarn), WithSyntaxErrorPolicy(ErrIgnore))
 	rec, _, v, err := u.Unmarshal(bufio.NewReader(strings.NewReader(record)))
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.NotEmpty(t, v)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got := v; len(got) == 0 {
+		t.Errorf("v = %v, want nonempty", got)
+	}
 }
 
 func Test_Unmarshal_EndOfRecordMarker_TooFew(t *testing.T) {
@@ -1371,9 +1536,17 @@ func Test_Unmarshal_EndOfRecordMarker_TooFew(t *testing.T) {
 
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrWarn), WithSyntaxErrorPolicy(ErrIgnore))
 	rec, _, v, err := u.Unmarshal(bufio.NewReader(strings.NewReader(record)))
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rec.Close()) }()
-	assert.NotEmpty(t, v)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		if err := rec.Close(); err != nil {
+			t.Errorf("rec.Close() error = %v", err)
+		}
+	}()
+	if got := v; len(got) == 0 {
+		t.Errorf("v = %v, want nonempty", got)
+	}
 }
 
 func Test_Unmarshal_EndOfRecordMarker_ErrFail(t *testing.T) {
@@ -1389,7 +1562,9 @@ func Test_Unmarshal_EndOfRecordMarker_ErrFail(t *testing.T) {
 
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrIgnore))
 	_, _, _, err := u.Unmarshal(bufio.NewReader(strings.NewReader(record)))
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func Test_Unmarshal_GzipReuseReset(t *testing.T) {
@@ -1411,13 +1586,17 @@ func Test_Unmarshal_GzipReuseReset(t *testing.T) {
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrIgnore), WithSyntaxErrorPolicy(ErrIgnore))
 	// First call initializes u.gz
 	rec, _, _, err := u.Unmarshal(bufio.NewReader(bytes.NewReader(compressed.Bytes())))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	_ = rec.Close()
 
 	// Second call with corrupt gzip triggers gz.Reset() error path
 	corruptGzip := []byte{0x1f, 0x8b, 0x08, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 	_, _, _, err = u.Unmarshal(bufio.NewReader(bytes.NewReader(corruptGzip)))
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func Test_Unmarshal_ValidateDigestError(t *testing.T) {
@@ -1434,5 +1613,7 @@ func Test_Unmarshal_ValidateDigestError(t *testing.T) {
 
 	u := NewUnmarshaler(WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrIgnore))
 	_, _, _, err := u.Unmarshal(bufio.NewReader(strings.NewReader(record)))
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }

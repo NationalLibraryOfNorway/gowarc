@@ -21,13 +21,11 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func createReaderOfSize(size int64) (io.Reader, string) {
@@ -50,8 +48,12 @@ func TestSmallBuffer(t *testing.T) {
 	bb := New()
 	defer bb.Close()
 	_, err := io.Copy(bb, r)
-	assert.NoError(t, err)
-	assert.Equal(t, hash, hashOfReader(bb))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := hashOfReader(bb), hash; got != want {
+		t.Errorf("hashOfReader(bb) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBigBuffer(t *testing.T) {
@@ -59,8 +61,12 @@ func TestBigBuffer(t *testing.T) {
 	bb := New()
 	defer bb.Close()
 	_, err := io.Copy(bb, r)
-	assert.NoError(t, err)
-	assert.Equal(t, hash, hashOfReader(bb))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := hashOfReader(bb), hash; got != want {
+		t.Errorf("hashOfReader(bb) = %#v, want %#v", got, want)
+	}
 }
 
 func TestSeek(t *testing.T) {
@@ -70,15 +76,25 @@ func TestSeek(t *testing.T) {
 	defer bb.Close()
 	_, err := io.Copy(bb, r)
 
-	assert.NoError(t, err)
-	assert.Equal(t, hash, hashOfReader(bb))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := hashOfReader(bb), hash; got != want {
+		t.Errorf("hashOfReader(bb) = %#v, want %#v", got, want)
+	}
 	l := bb.Size()
-	assert.Equal(t, tlen, l)
+	if got, want := l, tlen; got != want {
+		t.Errorf("l = %#v, want %#v", got, want)
+	}
 
 	bb.Seek(0, io.SeekStart)
-	assert.Equal(t, hash, hashOfReader(bb))
+	if got, want := hashOfReader(bb), hash; got != want {
+		t.Errorf("hashOfReader(bb) = %#v, want %#v", got, want)
+	}
 	l = bb.Size()
-	assert.Equal(t, tlen, l)
+	if got, want := l, tlen; got != want {
+		t.Errorf("l = %#v, want %#v", got, want)
+	}
 }
 
 func TestSeekWithFile(t *testing.T) {
@@ -88,15 +104,25 @@ func TestSeekWithFile(t *testing.T) {
 	defer bb.Close()
 	_, err := io.Copy(bb, r)
 
-	assert.NoError(t, err)
-	assert.Equal(t, hash, hashOfReader(bb))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := hashOfReader(bb), hash; got != want {
+		t.Errorf("hashOfReader(bb) = %#v, want %#v", got, want)
+	}
 	l := bb.Size()
-	assert.Equal(t, tlen, l)
+	if got, want := l, tlen; got != want {
+		t.Errorf("l = %#v, want %#v", got, want)
+	}
 
 	bb.Seek(0, io.SeekStart)
-	assert.Equal(t, hash, hashOfReader(bb))
+	if got, want := hashOfReader(bb), hash; got != want {
+		t.Errorf("hashOfReader(bb) = %#v, want %#v", got, want)
+	}
 	l = bb.Size()
-	assert.Equal(t, tlen, l)
+	if got, want := l, tlen; got != want {
+		t.Errorf("l = %#v, want %#v", got, want)
+	}
 }
 
 func TestLimitDoesNotExceed(t *testing.T) {
@@ -105,10 +131,16 @@ func TestLimitDoesNotExceed(t *testing.T) {
 	bb := New(WithMaxMemBytes(1024), WithMaxTotalBytes(requestSize+1))
 	defer bb.Close()
 	_, err := io.Copy(bb, r)
-	assert.NoError(t, err)
-	assert.Equal(t, hash, hashOfReader(bb))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := hashOfReader(bb), hash; got != want {
+		t.Errorf("hashOfReader(bb) = %#v, want %#v", got, want)
+	}
 	size := bb.Size()
-	assert.Equal(t, requestSize, size)
+	if got, want := size, requestSize; got != want {
+		t.Errorf("size = %#v, want %#v", got, want)
+	}
 }
 
 func TestLimitExceeds(t *testing.T) {
@@ -117,7 +149,9 @@ func TestLimitExceeds(t *testing.T) {
 	bb := New(WithMaxMemBytes(1024), WithMaxTotalBytes(requestSize-1))
 	defer bb.Close()
 	_, err := io.Copy(bb, r)
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
 }
 
 func TestLimitExceedsMemBytes(t *testing.T) {
@@ -126,7 +160,9 @@ func TestLimitExceedsMemBytes(t *testing.T) {
 	bb := New(WithMaxMemBytes(int(requestSize+1)), WithMaxTotalBytes(requestSize-1))
 	defer bb.Close()
 	_, err := io.Copy(bb, r)
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
 }
 
 func TestWriteToBigBuffer(t *testing.T) {
@@ -135,13 +171,21 @@ func TestWriteToBigBuffer(t *testing.T) {
 	bb := New()
 	defer bb.Close()
 	_, err := io.Copy(bb, r)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	other := &bytes.Buffer{}
 	wrote, err := bb.WriteTo(other)
-	assert.NoError(t, err)
-	assert.Equal(t, l, wrote)
-	assert.Equal(t, hash, hashOfReader(other))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := wrote, l; got != want {
+		t.Errorf("wrote = %#v, want %#v", got, want)
+	}
+	if got, want := hashOfReader(other), hash; got != want {
+		t.Errorf("hashOfReader(other) = %#v, want %#v", got, want)
+	}
 }
 
 func TestWriteToSmallBuffer(t *testing.T) {
@@ -150,13 +194,21 @@ func TestWriteToSmallBuffer(t *testing.T) {
 	bb := New()
 	defer bb.Close()
 	_, err := io.Copy(bb, r)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	other := &bytes.Buffer{}
 	wrote, err := bb.WriteTo(other)
-	assert.NoError(t, err)
-	assert.Equal(t, l, wrote)
-	assert.Equal(t, hash, hashOfReader(other))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := wrote, l; got != want {
+		t.Errorf("wrote = %#v, want %#v", got, want)
+	}
+	if got, want := hashOfReader(other), hash; got != want {
+		t.Errorf("hashOfReader(other) = %#v, want %#v", got, want)
+	}
 }
 
 func TestReadFromSmallBuffer(t *testing.T) {
@@ -166,10 +218,16 @@ func TestReadFromSmallBuffer(t *testing.T) {
 	defer bb.Close()
 
 	total, err := bb.ReadFrom(r)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, int64(1), total)
+	if got := err; got != nil {
+		t.Errorf("err = %v, want nil", got)
+	}
+	if got, want := total, int64(1); got != want {
+		t.Errorf("total = %#v, want %#v", got, want)
+	}
 
-	assert.Equal(t, hash, hashOfReader(bb))
+	if got, want := hashOfReader(bb), hash; got != want {
+		t.Errorf("hashOfReader(bb) = %#v, want %#v", got, want)
+	}
 }
 
 func TestReadFromBigBuffer(t *testing.T) {
@@ -180,10 +238,16 @@ func TestReadFromBigBuffer(t *testing.T) {
 	defer bb.Close()
 
 	total, err := bb.ReadFrom(r)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, size, total)
+	if got := err; got != nil {
+		t.Errorf("err = %v, want nil", got)
+	}
+	if got, want := total, size; got != want {
+		t.Errorf("total = %#v, want %#v", got, want)
+	}
 
-	assert.Equal(t, hash, hashOfReader(bb))
+	if got, want := hashOfReader(bb), hash; got != want {
+		t.Errorf("hashOfReader(bb) = %#v, want %#v", got, want)
+	}
 }
 
 func TestWriterOnceMaxSizeExceeded(t *testing.T) {
@@ -194,7 +258,9 @@ func TestWriterOnceMaxSizeExceeded(t *testing.T) {
 	defer bb.Close()
 
 	_, err := io.Copy(bb, r)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func TestSeekInvalidWhence(t *testing.T) {
@@ -203,7 +269,9 @@ func TestSeekInvalidWhence(t *testing.T) {
 
 	_, _ = bb.Write([]byte("abc"))
 	_, err := bb.Seek(0, 12345)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func TestSeekBounds(t *testing.T) {
@@ -212,15 +280,23 @@ func TestSeekBounds(t *testing.T) {
 	_, _ = bb.Write([]byte("abc"))
 
 	_, err := bb.Seek(-1, io.SeekStart)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 
 	// Standard io.Seeker: seeking past end is allowed
 	pos, err := bb.Seek(4, io.SeekStart)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(4), pos)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := pos, int64(4); got != want {
+		t.Errorf("pos = %#v, want %#v", got, want)
+	}
 
 	_, err = bb.Seek(-1, io.SeekEnd)
-	assert.NoError(t, err) // valid: position size-1
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	} // valid: position size-1
 }
 
 func TestTotalLimitExactThenExceedByOne(t *testing.T) {
@@ -228,14 +304,26 @@ func TestTotalLimitExactThenExceedByOne(t *testing.T) {
 	defer bb.Close()
 
 	n, err := bb.Write([]byte("12345"))
-	assert.Equal(t, 5, n)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(5), bb.Size())
+	if got, want := n, 5; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := bb.Size(), int64(5); got != want {
+		t.Errorf("bb.Size() = %#v, want %#v", got, want)
+	}
 
 	n, err = bb.Write([]byte("x"))
-	assert.Equal(t, 0, n)
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
-	assert.Equal(t, int64(5), bb.Size())
+	if got, want := n, 0; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
+	if got, want := bb.Size(), int64(5); got != want {
+		t.Errorf("bb.Size() = %#v, want %#v", got, want)
+	}
 }
 
 func TestMemLimitBoundarySpillsToDisk(t *testing.T) {
@@ -243,15 +331,23 @@ func TestMemLimitBoundarySpillsToDisk(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Write([]byte("abc")) // fills mem
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	_, err = bb.Write([]byte("def")) // should go to file
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	bb.Seek(0, io.SeekStart)
 	out, _ := io.ReadAll(bb)
-	assert.Equal(t, "abcdef", string(out))
-	assert.Equal(t, int64(6), bb.Size())
+	if got, want := string(out), "abcdef"; got != want {
+		t.Errorf("string(out) = %#v, want %#v", got, want)
+	}
+	if got, want := bb.Size(), int64(6); got != want {
+		t.Errorf("bb.Size() = %#v, want %#v", got, want)
+	}
 }
 
 func TestReadAtAcrossMemDiskBoundary(t *testing.T) {
@@ -259,16 +355,26 @@ func TestReadAtAcrossMemDiskBoundary(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Write([]byte("0123456789")) // mem:0123 disk:456789
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	b, ok := bb.(*buffer)
-	assert.True(t, ok)
+	if got := ok; !got {
+		t.Errorf("ok = %v, want true", got)
+	}
 
 	p := make([]byte, 6)
 	n, err := b.ReadAt(p, 2) // "234567"
-	assert.Equal(t, 6, n)
-	assert.NoError(t, err)
-	assert.Equal(t, "234567", string(p))
+	if got, want := n, 6; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := string(p), "234567"; got != want {
+		t.Errorf("string(p) = %#v, want %#v", got, want)
+	}
 }
 
 func TestReadByteAtBoundary(t *testing.T) {
@@ -277,18 +383,30 @@ func TestReadByteAtBoundary(t *testing.T) {
 	_, _ = bb.Write([]byte("012345"))
 
 	b, ok := bb.(*buffer)
-	assert.True(t, ok)
+	if got := ok; !got {
+		t.Errorf("ok = %v, want true", got)
+	}
 
 	c, err := b.ReadByteAt(3) // last in mem
-	assert.NoError(t, err)
-	assert.Equal(t, byte('3'), c)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := c, byte('3'); got != want {
+		t.Errorf("c = %#v, want %#v", got, want)
+	}
 
 	c, err = b.ReadByteAt(4) // first in disk
-	assert.NoError(t, err)
-	assert.Equal(t, byte('4'), c)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := c, byte('4'); got != want {
+		t.Errorf("c = %#v, want %#v", got, want)
+	}
 
 	_, err = b.ReadByteAt(6) // out of range
-	assert.Equal(t, io.EOF, err)
+	if got, want := err, io.EOF; !errors.Is(got, want) {
+		t.Errorf("err = %#v, want %#v", got, want)
+	}
 }
 
 func TestPeekDoesNotAdvanceAndEOF(t *testing.T) {
@@ -297,19 +415,35 @@ func TestPeekDoesNotAdvanceAndEOF(t *testing.T) {
 	_, _ = bb.Write([]byte("abc"))
 
 	p, err := bb.Peek(2)
-	assert.NoError(t, err)
-	assert.Equal(t, "ab", string(p))
-	assert.Equal(t, int64(0), bb.(*buffer).pos) // if you can access; otherwise read and compare
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := string(p), "ab"; got != want {
+		t.Errorf("string(p) = %#v, want %#v", got, want)
+	}
+	if got, want := bb.(*buffer).pos, int64(0); got != want {
+		t.Errorf("bb.(*buffer).pos = %#v, want %#v", got, want)
+	} // if you can access; otherwise read and compare
 
 	buf := make([]byte, 2)
 	n, err := bb.Read(buf)
-	assert.Equal(t, 2, n)
-	assert.NoError(t, err)
-	assert.Equal(t, "ab", string(buf))
+	if got, want := n, 2; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := string(buf), "ab"; got != want {
+		t.Errorf("string(buf) = %#v, want %#v", got, want)
+	}
 
 	p, err = bb.Peek(5)
-	assert.Error(t, err)
-	assert.True(t, len(p) <= 5) // if you return short slices, this becomes exact
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if got := len(p) <= 5; !got {
+		t.Errorf("len(p) <= 5 = %v, want true", got)
+	} // if you return short slices, this becomes exact
 }
 
 func TestReadFromExceedsTotalLimitReportsCount(t *testing.T) {
@@ -318,9 +452,15 @@ func TestReadFromExceedsTotalLimitReportsCount(t *testing.T) {
 
 	r := bytes.NewReader([]byte("0123456789"))
 	n, err := bb.ReadFrom(r)
-	assert.Equal(t, int64(6), n)
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
-	assert.Equal(t, int64(6), bb.Size())
+	if got, want := n, int64(6); got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
+	if got, want := bb.Size(), int64(6); got != want {
+		t.Errorf("bb.Size() = %#v, want %#v", got, want)
+	}
 }
 
 func TestReadOnlyRejectsWrites(t *testing.T) {
@@ -328,66 +468,102 @@ func TestReadOnlyRejectsWrites(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Write([]byte("x"))
-	assert.ErrorIs(t, err, ErrReadOnly)
+	if got, want := err, ErrReadOnly; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	err = bb.WriteByte('x')
-	assert.ErrorIs(t, err, ErrReadOnly)
+	if got, want := err, ErrReadOnly; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.WriteString("x")
-	assert.ErrorIs(t, err, ErrReadOnly)
+	if got, want := err, ErrReadOnly; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.ReadFrom(bytes.NewReader([]byte("x")))
-	assert.ErrorIs(t, err, ErrReadOnly)
+	if got, want := err, ErrReadOnly; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestCloseIdempotent(t *testing.T) {
 	bb := New(WithMaxMemBytes(1))
 	_ = bb.Close()
 	err := bb.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 }
 
 func TestUseAfterClose(t *testing.T) {
 	bb := New()
 	_, _ = bb.Write([]byte("hello"))
-	require.NoError(t, bb.Close())
+	if err := bb.Close(); err != nil {
+		t.Fatalf("bb.Close() error = %v", err)
+	}
 
 	// All operations should return ErrClosed
 	_, err := bb.Write([]byte("x"))
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.WriteString("x")
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	err = bb.WriteByte('x')
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.ReadFrom(strings.NewReader("x"))
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.Seek(0, io.SeekStart)
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.Read(make([]byte, 1))
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.ReadAt(make([]byte, 1), 0)
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.ReadByte()
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.ReadBytes('\n')
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.Peek(1)
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.WriteTo(io.Discard)
-	assert.ErrorIs(t, err, ErrClosed)
+	if got, want := err, ErrClosed; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	// Size/Len/Limit return 0
-	assert.Equal(t, int64(0), bb.Size())
+	if got, want := bb.Size(), int64(0); got != want {
+		t.Errorf("bb.Size() = %#v, want %#v", got, want)
+	}
 }
 
 func TestPeekNegativeCount(t *testing.T) {
@@ -396,7 +572,9 @@ func TestPeekNegativeCount(t *testing.T) {
 	_, _ = bb.Write([]byte("abc"))
 
 	_, err := bb.Peek(-1)
-	assert.ErrorIs(t, err, errNegativeCount)
+	if got, want := err, errNegativeCount; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestSliceFiniteSize(t *testing.T) {
@@ -406,8 +584,12 @@ func TestSliceFiniteSize(t *testing.T) {
 
 	s := io.NewSectionReader(bb, 3, 4) // "3456"
 	out, err := io.ReadAll(s)
-	assert.NoError(t, err)
-	assert.Equal(t, "3456", string(out))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := string(out), "3456"; got != want {
+		t.Errorf("string(out) = %#v, want %#v", got, want)
+	}
 }
 
 func TestSliceSeekEnd(t *testing.T) {
@@ -417,13 +599,21 @@ func TestSliceSeekEnd(t *testing.T) {
 
 	s := io.NewSectionReader(bb, 3, 4) // size 4
 	_, err := s.Seek(-1, io.SeekEnd)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	b := make([]byte, 1)
 	n, err := s.Read(b)
-	assert.Equal(t, 1, n)
-	assert.NoError(t, err)
-	assert.Equal(t, "6", string(b))
+	if got, want := n, 1; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := string(b), "6"; got != want {
+		t.Errorf("string(b) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_EmptyBuffer(t *testing.T) {
@@ -452,19 +642,31 @@ func TestBuffer_SingleByte(t *testing.T) {
 
 	// Write single byte
 	n, err := bb.Write([]byte{42})
-	require.NoError(t, err)
-	require.Equal(t, 1, n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 1; got != want {
+		t.Fatalf("n = %#v, want %#v", got, want)
+	}
 
 	// Seek to start
 	_, err = bb.Seek(0, io.SeekStart)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Read single byte
 	buf := make([]byte, 1)
 	n, err = bb.Read(buf)
-	require.NoError(t, err)
-	require.Equal(t, 1, n)
-	require.Equal(t, byte(42), buf[0])
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 1; got != want {
+		t.Fatalf("n = %#v, want %#v", got, want)
+	}
+	if got, want := buf[0], byte(42); got != want {
+		t.Fatalf("buf[0] = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_ZeroByteWrite(t *testing.T) {
@@ -473,8 +675,12 @@ func TestBuffer_ZeroByteWrite(t *testing.T) {
 
 	// Write zero bytes
 	n, err := bb.Write([]byte{})
-	require.NoError(t, err)
-	require.Equal(t, 0, n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 0; got != want {
+		t.Fatalf("n = %#v, want %#v", got, want)
+	}
 
 	// Size should still be 0
 	if bb.Size() != 0 {
@@ -487,16 +693,24 @@ func TestBuffer_ZeroByteRead(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Write([]byte("test"))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	_, err = bb.Seek(0, io.SeekStart)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Read zero bytes
 	buf := make([]byte, 0)
 	n, err := bb.Read(buf)
-	require.NoError(t, err)
-	require.Equal(t, 0, n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 0; got != want {
+		t.Fatalf("n = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_SeekBeyondEnd(t *testing.T) {
@@ -505,18 +719,28 @@ func TestBuffer_SeekBeyondEnd(t *testing.T) {
 
 	data := []byte("test data")
 	_, err := bb.Write(data)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Standard io.Seeker: seeking past end is allowed
 	pos, err := bb.Seek(100, io.SeekStart)
-	require.NoError(t, err)
-	assert.Equal(t, int64(100), pos)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := pos, int64(100); got != want {
+		t.Errorf("pos = %#v, want %#v", got, want)
+	}
 
 	// Read at past-end position returns 0, io.EOF
 	buf := make([]byte, 10)
 	n, readErr := bb.Read(buf)
-	assert.Equal(t, 0, n)
-	assert.ErrorIs(t, readErr, io.EOF)
+	if got, want := n, 0; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := readErr, io.EOF; !errors.Is(got, want) {
+		t.Errorf("readErr = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestBuffer_SeekNegative(t *testing.T) {
@@ -524,7 +748,9 @@ func TestBuffer_SeekNegative(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Write([]byte("test"))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Seek to negative position
 	_, err = bb.Seek(-1, io.SeekStart)
@@ -539,20 +765,28 @@ func TestBuffer_SeekCurrent(t *testing.T) {
 
 	data := []byte("0123456789")
 	_, err := bb.Write(data)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Seek to start
 	_, err = bb.Seek(0, io.SeekStart)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Read 5 bytes
 	buf := make([]byte, 5)
 	_, err = bb.Read(buf)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Seek forward 2 from current
 	pos, err := bb.Seek(2, io.SeekCurrent)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if pos != 7 {
 		t.Errorf("Seek(2, Current) from position 5 = %d, want 7", pos)
 	}
@@ -560,8 +794,12 @@ func TestBuffer_SeekCurrent(t *testing.T) {
 	// Read should get byte at position 7
 	buf = make([]byte, 1)
 	n, err := bb.Read(buf)
-	require.NoError(t, err)
-	require.Equal(t, 1, n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 1; got != want {
+		t.Fatalf("n = %#v, want %#v", got, want)
+	}
 	if buf[0] != '7' {
 		t.Errorf("Read after seek = %c, want '7'", buf[0])
 	}
@@ -573,18 +811,24 @@ func TestBuffer_SeekEnd(t *testing.T) {
 
 	data := []byte("0123456789")
 	_, err := bb.Write(data)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Seek to end
 	pos, err := bb.Seek(0, io.SeekEnd)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if pos != int64(len(data)) {
 		t.Errorf("Seek(0, End) = %d, want %d", pos, len(data))
 	}
 
 	// Seek backward from end
 	pos, err = bb.Seek(-5, io.SeekEnd)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if pos != int64(len(data)-5) {
 		t.Errorf("Seek(-5, End) = %d, want %d", pos, len(data)-5)
 	}
@@ -592,8 +836,12 @@ func TestBuffer_SeekEnd(t *testing.T) {
 	// Read should get the last 5 bytes
 	buf := make([]byte, 5)
 	n, err := bb.Read(buf)
-	require.NoError(t, err)
-	require.Equal(t, 5, n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 5; got != want {
+		t.Fatalf("n = %#v, want %#v", got, want)
+	}
 	if string(buf) != "56789" {
 		t.Errorf("Read after Seek(-5, End) = %q, want %q", string(buf), "56789")
 	}
@@ -604,7 +852,9 @@ func TestBuffer_MultipleClose(t *testing.T) {
 
 	// First close
 	err := bb.Close()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Second close should not panic
 	err = bb.Close()
@@ -694,19 +944,27 @@ func TestBuffer_AlternatingWriteRead(t *testing.T) {
 		// Write
 		data := []byte{byte(i)}
 		_, err := bb.Write(data)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 
 	// Seek to beginning
 	_, err := bb.Seek(0, io.SeekStart)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Read back
 	for i := 0; i < 10; i++ {
 		buf := make([]byte, 1)
 		n, err := bb.Read(buf)
-		require.NoError(t, err)
-		require.Equal(t, 1, n)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got, want := n, 1; got != want {
+			t.Fatalf("n = %#v, want %#v", got, want)
+		}
 		if buf[0] != byte(i) {
 			t.Errorf("Read[%d] = %d, want %d", i, buf[0], i)
 		}
@@ -719,9 +977,15 @@ func TestBuffer_WriteTo_Empty(t *testing.T) {
 
 	var buf bytes.Buffer
 	n, err := bb.WriteTo(&buf)
-	require.NoError(t, err)
-	require.Equal(t, int64(0), n)
-	require.Equal(t, 0, buf.Len())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, int64(0); got != want {
+		t.Fatalf("n = %#v, want %#v", got, want)
+	}
+	if got, want := buf.Len(), 0; got != want {
+		t.Fatalf("buf.Len() = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_WriteTo_AfterPartialRead(t *testing.T) {
@@ -730,22 +994,34 @@ func TestBuffer_WriteTo_AfterPartialRead(t *testing.T) {
 
 	data := []byte("0123456789")
 	_, err := bb.Write(data)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Seek to start and read 5 bytes
 	_, err = bb.Seek(0, io.SeekStart)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	buf := make([]byte, 5)
 	_, err = bb.Read(buf)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// WriteTo should write remaining 5 bytes
 	var outBuf bytes.Buffer
 	n, err := bb.WriteTo(&outBuf)
-	require.NoError(t, err)
-	require.Equal(t, int64(5), n)
-	require.Equal(t, "56789", outBuf.String())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, int64(5); got != want {
+		t.Fatalf("n = %#v, want %#v", got, want)
+	}
+	if got, want := outBuf.String(), "56789"; got != want {
+		t.Fatalf("outBuf.String() = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_ReadFrom_Error(t *testing.T) {
@@ -756,8 +1032,12 @@ func TestBuffer_ReadFrom_Error(t *testing.T) {
 	r := strings.NewReader(strings.Repeat("a", 100))
 	_, err := bb.ReadFrom(r)
 
-	assert.Error(t, err)
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
 }
 
 func TestBuffer_Size_AfterSeek(t *testing.T) {
@@ -766,13 +1046,17 @@ func TestBuffer_Size_AfterSeek(t *testing.T) {
 
 	data := []byte("test data")
 	_, err := bb.Write(data)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	size1 := bb.Size()
 
 	// Seek to middle
 	_, err = bb.Seek(4, io.SeekStart)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	size2 := bb.Size()
 
@@ -790,19 +1074,27 @@ func TestBuffer_TransitionFromMemToFile(t *testing.T) {
 	// Write small amount (should stay in memory)
 	small := []byte("small")
 	_, err := bb.Write(small)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Write large amount (should transition to file)
 	large := bytes.Repeat([]byte("a"), 100)
 	_, err = bb.Write(large)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Verify all data is readable
 	_, err = bb.Seek(0, io.SeekStart)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	result, err := io.ReadAll(bb)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	expected := append(small, large...)
 	if !bytes.Equal(result, expected) {
@@ -821,13 +1113,19 @@ func TestBuffer_BinaryData(t *testing.T) {
 	}
 
 	_, err := bb.Write(data)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	_, err = bb.Seek(0, io.SeekStart)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	result, err := io.ReadAll(bb)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if !bytes.Equal(result, data) {
 		t.Error("Binary data corrupted")
@@ -839,7 +1137,9 @@ func TestBuffer_SeekBeyondSize(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Write([]byte("test"))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Try to seek way beyond
 	_, err = bb.Seek(1000, io.SeekStart)
@@ -857,19 +1157,29 @@ func TestBuffer_MaxMemBytes_Boundary(t *testing.T) {
 	// Write exactly maxMemBytes
 	data := bytes.Repeat([]byte("a"), maxMem)
 	_, err := bb.Write(data)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Write one more byte (should trigger file)
 	_, err = bb.Write([]byte("b"))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Verify data
 	_, err = bb.Seek(0, io.SeekStart)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	result, err := io.ReadAll(bb)
-	require.NoError(t, err)
-	require.Equal(t, maxMem+1, len(result))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := len(result), maxMem+1; got != want {
+		t.Fatalf("len(result) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_WriteString(t *testing.T) {
@@ -878,15 +1188,25 @@ func TestBuffer_WriteString(t *testing.T) {
 
 	text := "Hello, World!"
 	n, err := bb.WriteString(text)
-	require.NoError(t, err)
-	require.Equal(t, len(text), n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, len(text); got != want {
+		t.Fatalf("n = %#v, want %#v", got, want)
+	}
 
 	_, err = bb.Seek(0, io.SeekStart)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	result, err := io.ReadAll(bb)
-	require.NoError(t, err)
-	require.Equal(t, text, string(result))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(result), text; got != want {
+		t.Fatalf("string(result) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_WriteString_AfterMaxSize(t *testing.T) {
@@ -894,26 +1214,36 @@ func TestBuffer_WriteString_AfterMaxSize(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.WriteString("Hello, World!")
-	assert.Error(t, err)
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
 }
 
 // ---- Tests for previously uncovered code paths ----
 
 func TestErrMaxSizeExceeded_Error(t *testing.T) {
 	e := ErrMaxSizeExceeded(1024)
-	assert.Equal(t, "diskbuffer: maximum size 1024 exceeded", e.Error())
+	if got, want := e.Error(), "diskbuffer: maximum size 1024 exceeded"; got != want {
+		t.Errorf("e.Error() = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_Limit(t *testing.T) {
 	bb := New(WithMaxTotalBytes(42))
 	defer bb.Close()
-	assert.Equal(t, int64(42), bb.(*buffer).Limit())
+	if got, want := bb.(*buffer).Limit(), int64(42); got != want {
+		t.Errorf("bb.(*buffer).Limit() = %#v, want %#v", got, want)
+	}
 
 	// Unlimited
 	bb2 := New()
 	defer bb2.Close()
-	assert.Equal(t, int64(unlimited), bb2.(*buffer).Limit())
+	if got, want := bb2.(*buffer).Limit(), int64(unlimited); got != want {
+		t.Errorf("bb2.(*buffer).Limit() = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_Len(t *testing.T) {
@@ -921,15 +1251,21 @@ func TestBuffer_Len(t *testing.T) {
 	defer bb.Close()
 
 	_, _ = bb.Write([]byte("0123456789"))
-	assert.Equal(t, int64(10), bb.(*buffer).Len())
+	if got, want := bb.(*buffer).Len(), int64(10); got != want {
+		t.Errorf("bb.(*buffer).Len() = %#v, want %#v", got, want)
+	}
 
 	// After seeking forward, Len decreases
 	_, _ = bb.Seek(3, io.SeekStart)
-	assert.Equal(t, int64(7), bb.(*buffer).Len())
+	if got, want := bb.(*buffer).Len(), int64(7); got != want {
+		t.Errorf("bb.(*buffer).Len() = %#v, want %#v", got, want)
+	}
 
 	// After seeking to end, Len is 0
 	_, _ = bb.Seek(0, io.SeekEnd)
-	assert.Equal(t, int64(0), bb.(*buffer).Len())
+	if got, want := bb.(*buffer).Len(), int64(0); got != want {
+		t.Errorf("bb.(*buffer).Len() = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_WriteByte(t *testing.T) {
@@ -938,21 +1274,31 @@ func TestBuffer_WriteByte(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		err := bb.WriteByte(byte('a' + i))
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
-	assert.Equal(t, int64(10), bb.Size())
+	if got, want := bb.Size(), int64(10); got != want {
+		t.Errorf("bb.Size() = %#v, want %#v", got, want)
+	}
 
 	_, _ = bb.Seek(0, io.SeekStart)
 	data, err := io.ReadAll(bb)
-	require.NoError(t, err)
-	assert.Equal(t, "abcdefghij", string(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(data), "abcdefghij"; got != want {
+		t.Errorf("string(data) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_WriteByte_ReadOnly(t *testing.T) {
 	bb := New(WithReadOnly(true))
 	defer bb.Close()
 	err := bb.WriteByte('x')
-	assert.ErrorIs(t, err, ErrReadOnly)
+	if got, want := err, ErrReadOnly; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestBuffer_WriteByte_MaxSize(t *testing.T) {
@@ -961,10 +1307,14 @@ func TestBuffer_WriteByte_MaxSize(t *testing.T) {
 	defer bb.Close()
 	// First byte goes into memory
 	err := bb.WriteByte('a')
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	// Second should exceed total limit
 	err = bb.WriteByte('b')
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
 }
 
 func TestBuffer_ReadByte_Sequential(t *testing.T) {
@@ -976,13 +1326,19 @@ func TestBuffer_ReadByte_Sequential(t *testing.T) {
 
 	for i, expected := range []byte("ABCDE") {
 		c, err := bb.ReadByte()
-		require.NoError(t, err, "ReadByte at position %d", i)
-		assert.Equal(t, expected, c)
+		if err != nil {
+			t.Fatalf("err error = %v: %s", err, fmt.Sprintf("ReadByte at position %d", i))
+		}
+		if got, want := c, expected; got != want {
+			t.Errorf("c = %#v, want %#v", got, want)
+		}
 	}
 
 	// Next read should return EOF
 	_, err := bb.ReadByte()
-	assert.ErrorIs(t, err, io.EOF)
+	if got, want := err, io.EOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestBuffer_ReadByte_AcrossBoundary(t *testing.T) {
@@ -995,8 +1351,12 @@ func TestBuffer_ReadByte_AcrossBoundary(t *testing.T) {
 
 	for i, expected := range []byte("ABCDE") {
 		c, err := bb.ReadByte()
-		require.NoError(t, err, "ReadByte at position %d", i)
-		assert.Equal(t, expected, c)
+		if err != nil {
+			t.Fatalf("err error = %v: %s", err, fmt.Sprintf("ReadByte at position %d", i))
+		}
+		if got, want := c, expected; got != want {
+			t.Errorf("c = %#v, want %#v", got, want)
+		}
 	}
 }
 
@@ -1006,12 +1366,20 @@ func TestBuffer_ReadByteAt_Memory(t *testing.T) {
 	_, _ = bb.Write([]byte("Hello"))
 
 	c, err := bb.(*buffer).ReadByteAt(0)
-	require.NoError(t, err)
-	assert.Equal(t, byte('H'), c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := c, byte('H'); got != want {
+		t.Errorf("c = %#v, want %#v", got, want)
+	}
 
 	c, err = bb.(*buffer).ReadByteAt(4)
-	require.NoError(t, err)
-	assert.Equal(t, byte('o'), c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := c, byte('o'); got != want {
+		t.Errorf("c = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_ReadByteAt_File(t *testing.T) {
@@ -1021,8 +1389,12 @@ func TestBuffer_ReadByteAt_File(t *testing.T) {
 
 	// Byte at offset 4 is on disk
 	c, err := bb.(*buffer).ReadByteAt(4)
-	require.NoError(t, err)
-	assert.Equal(t, byte('E'), c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := c, byte('E'); got != want {
+		t.Errorf("c = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_ReadByteAt_OutOfRange(t *testing.T) {
@@ -1031,10 +1403,14 @@ func TestBuffer_ReadByteAt_OutOfRange(t *testing.T) {
 	_, _ = bb.Write([]byte("Hi"))
 
 	_, err := bb.(*buffer).ReadByteAt(10)
-	assert.ErrorIs(t, err, io.EOF)
+	if got, want := err, io.EOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 
 	_, err = bb.(*buffer).ReadByteAt(-1)
-	assert.ErrorIs(t, err, errInvalidOffset)
+	if got, want := err, errInvalidOffset; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestBuffer_ReadBytes_InMemory(t *testing.T) {
@@ -1044,17 +1420,29 @@ func TestBuffer_ReadBytes_InMemory(t *testing.T) {
 	_, _ = bb.Seek(0, io.SeekStart)
 
 	line, err := bb.(*buffer).ReadBytes('\n')
-	require.NoError(t, err)
-	assert.Equal(t, "line1\n", string(line))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(line), "line1\n"; got != want {
+		t.Errorf("string(line) = %#v, want %#v", got, want)
+	}
 
 	line, err = bb.(*buffer).ReadBytes('\n')
-	require.NoError(t, err)
-	assert.Equal(t, "line2\n", string(line))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(line), "line2\n"; got != want {
+		t.Errorf("string(line) = %#v, want %#v", got, want)
+	}
 
 	// Third line has no trailing delimiter
 	line, err = bb.(*buffer).ReadBytes('\n')
-	assert.ErrorIs(t, err, io.EOF)
-	assert.Equal(t, "line3", string(line))
+	if got, want := err, io.EOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
+	if got, want := string(line), "line3"; got != want {
+		t.Errorf("string(line) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_ReadBytes_AcrossBoundary(t *testing.T) {
@@ -1067,18 +1455,30 @@ func TestBuffer_ReadBytes_AcrossBoundary(t *testing.T) {
 
 	// First line: "abc\n" — all in memory
 	line, err := bb.(*buffer).ReadBytes('\n')
-	require.NoError(t, err)
-	assert.Equal(t, "abc\n", string(line))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(line), "abc\n"; got != want {
+		t.Errorf("string(line) = %#v, want %#v", got, want)
+	}
 
 	// Second line: "defgh\n" — starts in memory, delimiter is on disk
 	line, err = bb.(*buffer).ReadBytes('\n')
-	require.NoError(t, err)
-	assert.Equal(t, "defgh\n", string(line))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(line), "defgh\n"; got != want {
+		t.Errorf("string(line) = %#v, want %#v", got, want)
+	}
 
 	// Third: "ij" — all on disk, no delimiter
 	line, err = bb.(*buffer).ReadBytes('\n')
-	assert.ErrorIs(t, err, io.EOF)
-	assert.Equal(t, "ij", string(line))
+	if got, want := err, io.EOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
+	if got, want := string(line), "ij"; got != want {
+		t.Errorf("string(line) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_ReadBytes_Empty(t *testing.T) {
@@ -1087,7 +1487,9 @@ func TestBuffer_ReadBytes_Empty(t *testing.T) {
 
 	_, _ = bb.Seek(0, io.SeekStart)
 	_, err := bb.(*buffer).ReadBytes('\n')
-	assert.ErrorIs(t, err, io.EOF)
+	if got, want := err, io.EOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestBuffer_ReadBytes_OnlyOnDisk(t *testing.T) {
@@ -1099,12 +1501,20 @@ func TestBuffer_ReadBytes_OnlyOnDisk(t *testing.T) {
 	_, _ = bb.Seek(0, io.SeekStart)
 
 	line, err := bb.(*buffer).ReadBytes('\n')
-	require.NoError(t, err)
-	assert.Equal(t, "aa\n", string(line))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(line), "aa\n"; got != want {
+		t.Errorf("string(line) = %#v, want %#v", got, want)
+	}
 
 	line, err = bb.(*buffer).ReadBytes('\n')
-	assert.ErrorIs(t, err, io.EOF)
-	assert.Equal(t, "bb", string(line))
+	if got, want := err, io.EOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
+	if got, want := string(line), "bb"; got != want {
+		t.Errorf("string(line) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_Peek_Negative(t *testing.T) {
@@ -1114,7 +1524,9 @@ func TestBuffer_Peek_Negative(t *testing.T) {
 	_, _ = bb.Seek(0, io.SeekStart)
 
 	_, err := bb.(*buffer).Peek(-1)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func TestBuffer_Peek_Zero(t *testing.T) {
@@ -1124,8 +1536,12 @@ func TestBuffer_Peek_Zero(t *testing.T) {
 	_, _ = bb.Seek(0, io.SeekStart)
 
 	p, err := bb.(*buffer).Peek(0)
-	require.NoError(t, err)
-	assert.Empty(t, p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := p; len(got) != 0 {
+		t.Errorf("p = %v, want empty", got)
+	}
 }
 
 func TestBuffer_Peek_ExceedsLen(t *testing.T) {
@@ -1135,8 +1551,12 @@ func TestBuffer_Peek_ExceedsLen(t *testing.T) {
 	_, _ = bb.Seek(0, io.SeekStart)
 
 	p, err := bb.(*buffer).Peek(100)
-	assert.ErrorIs(t, err, io.EOF)
-	assert.Equal(t, "hi", string(p))
+	if got, want := err, io.EOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
+	if got, want := string(p), "hi"; got != want {
+		t.Errorf("string(p) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_Peek_AtEnd(t *testing.T) {
@@ -1146,8 +1566,12 @@ func TestBuffer_Peek_AtEnd(t *testing.T) {
 	_, _ = bb.Seek(0, io.SeekEnd)
 
 	p, err := bb.(*buffer).Peek(1)
-	assert.ErrorIs(t, err, io.EOF)
-	assert.Empty(t, p)
+	if got, want := err, io.EOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
+	if got := p; len(got) != 0 {
+		t.Errorf("p = %v, want empty", got)
+	}
 }
 
 func TestBuffer_Peek_AcrossBoundary(t *testing.T) {
@@ -1158,11 +1582,17 @@ func TestBuffer_Peek_AcrossBoundary(t *testing.T) {
 
 	// Peek 4 bytes: B(mem) C(mem) D(file) E(file)
 	p, err := bb.(*buffer).Peek(4)
-	require.NoError(t, err)
-	assert.Equal(t, "BCDE", string(p))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(p), "BCDE"; got != want {
+		t.Errorf("string(p) = %#v, want %#v", got, want)
+	}
 
 	// Position should not have changed
-	assert.Equal(t, int64(1), bb.(*buffer).pos)
+	if got, want := bb.(*buffer).pos, int64(1); got != want {
+		t.Errorf("bb.(*buffer).pos = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_Seek_InvalidWhence(t *testing.T) {
@@ -1170,8 +1600,12 @@ func TestBuffer_Seek_InvalidWhence(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Seek(0, 99)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid whence")
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
+	if got, want := err.Error(), "invalid whence"; !strings.Contains(got, want) {
+		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
 }
 
 func TestBuffer_ReadAt_NegativeOffset(t *testing.T) {
@@ -1181,7 +1615,9 @@ func TestBuffer_ReadAt_NegativeOffset(t *testing.T) {
 
 	buf := make([]byte, 4)
 	_, err := bb.ReadAt(buf, -1)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 func TestBuffer_ReadAt_EmptyBuffer(t *testing.T) {
@@ -1191,8 +1627,12 @@ func TestBuffer_ReadAt_EmptyBuffer(t *testing.T) {
 	// Empty read should succeed
 	buf := make([]byte, 0)
 	n, err := bb.ReadAt(buf, 0)
-	assert.NoError(t, err)
-	assert.Equal(t, 0, n)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := n, 0; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_WriteString_SpillsToDisk(t *testing.T) {
@@ -1200,13 +1640,21 @@ func TestBuffer_WriteString_SpillsToDisk(t *testing.T) {
 	defer bb.Close()
 
 	n, err := bb.(*buffer).WriteString("Hello, World!")
-	require.NoError(t, err)
-	assert.Equal(t, 13, n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 13; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
 
 	_, _ = bb.Seek(0, io.SeekStart)
 	data, err := io.ReadAll(bb)
-	require.NoError(t, err)
-	assert.Equal(t, "Hello, World!", string(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(data), "Hello, World!"; got != want {
+		t.Errorf("string(data) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_WriteString_ReadOnly(t *testing.T) {
@@ -1214,7 +1662,9 @@ func TestBuffer_WriteString_ReadOnly(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.WriteString("test")
-	assert.ErrorIs(t, err, ErrReadOnly)
+	if got, want := err, ErrReadOnly; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestBuffer_WriteString_Empty(t *testing.T) {
@@ -1222,8 +1672,12 @@ func TestBuffer_WriteString_Empty(t *testing.T) {
 	defer bb.Close()
 
 	n, err := bb.WriteString("")
-	require.NoError(t, err)
-	assert.Equal(t, 0, n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 0; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_ReadFrom_ReadError(t *testing.T) {
@@ -1232,7 +1686,9 @@ func TestBuffer_ReadFrom_ReadError(t *testing.T) {
 
 	r := &errReader{err: io.ErrUnexpectedEOF}
 	_, err := bb.ReadFrom(r)
-	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	if got, want := err, io.ErrUnexpectedEOF; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 type errReader struct{ err error }
@@ -1246,7 +1702,9 @@ func TestBuffer_ReadFrom_ReadOnly(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.ReadFrom(strings.NewReader("data"))
-	assert.ErrorIs(t, err, ErrReadOnly)
+	if got, want := err, ErrReadOnly; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestBuffer_WriteTo_WithFileBuffer(t *testing.T) {
@@ -1258,9 +1716,15 @@ func TestBuffer_WriteTo_WithFileBuffer(t *testing.T) {
 
 	var out bytes.Buffer
 	n, err := bb.WriteTo(&out)
-	require.NoError(t, err)
-	assert.Equal(t, int64(5), n)
-	assert.Equal(t, "ABCDE", out.String())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, int64(5); got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := out.String(), "ABCDE"; got != want {
+		t.Errorf("out.String() = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_WriteTo_FromMiddle(t *testing.T) {
@@ -1273,9 +1737,15 @@ func TestBuffer_WriteTo_FromMiddle(t *testing.T) {
 
 	var out bytes.Buffer
 	n, err := bb.WriteTo(&out)
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), n)
-	assert.Equal(t, "E", out.String())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, int64(1); got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := out.String(), "E"; got != want {
+		t.Errorf("out.String() = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_Write_ReadOnly(t *testing.T) {
@@ -1283,7 +1753,9 @@ func TestBuffer_Write_ReadOnly(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Write([]byte("test"))
-	assert.ErrorIs(t, err, ErrReadOnly)
+	if got, want := err, ErrReadOnly; !errors.Is(got, want) {
+		t.Errorf("err = %v, want an error matching %v", got, want)
+	}
 }
 
 func TestBuffer_Options_WithTmpDir(t *testing.T) {
@@ -1292,12 +1764,18 @@ func TestBuffer_Options_WithTmpDir(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Write([]byte("data"))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	_, _ = bb.Seek(0, io.SeekStart)
 	data, err := io.ReadAll(bb)
-	require.NoError(t, err)
-	assert.Equal(t, "data", string(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(data), "data"; got != want {
+		t.Errorf("string(data) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_Options_WithMemBufferSizeHint(t *testing.T) {
@@ -1305,8 +1783,12 @@ func TestBuffer_Options_WithMemBufferSizeHint(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Write([]byte("test"))
-	require.NoError(t, err)
-	assert.Equal(t, int64(4), bb.Size())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := bb.Size(), int64(4); got != want {
+		t.Errorf("bb.Size() = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_Options_MemExceedsTotal(t *testing.T) {
@@ -1317,11 +1799,15 @@ func TestBuffer_Options_MemExceedsTotal(t *testing.T) {
 	// Write exactly 10 bytes (total limit)
 	data := []byte("0123456789")
 	_, err := bb.Write(data)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Writing one more should fail
 	_, err = bb.Write([]byte("x"))
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
 }
 
 func TestBuffer_Write_SpillCreatesFileBuffer(t *testing.T) {
@@ -1330,19 +1816,31 @@ func TestBuffer_Write_SpillCreatesFileBuffer(t *testing.T) {
 
 	// Write 5 bytes to fill memory
 	_, err := bb.Write([]byte("12345"))
-	require.NoError(t, err)
-	assert.Nil(t, bb.(*buffer).fileBuf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := bb.(*buffer).fileBuf; got != nil {
+		t.Errorf("bb.(*buffer).fileBuf = %v, want nil", got)
+	}
 
 	// Write 1 more byte to trigger file creation
 	_, err = bb.Write([]byte("6"))
-	require.NoError(t, err)
-	assert.NotNil(t, bb.(*buffer).fileBuf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := bb.(*buffer).fileBuf; got == nil {
+		t.Errorf("bb.(*buffer).fileBuf = %v, want non-nil", got)
+	}
 
 	// Read back all data
 	_, _ = bb.Seek(0, io.SeekStart)
 	data, err := io.ReadAll(bb)
-	require.NoError(t, err)
-	assert.Equal(t, "123456", string(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(data), "123456"; got != want {
+		t.Errorf("string(data) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_Write_NoSpaceLeft(t *testing.T) {
@@ -1351,11 +1849,17 @@ func TestBuffer_Write_NoSpaceLeft(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.Write([]byte("abc"))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	n, err := bb.Write([]byte("d"))
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
-	assert.Equal(t, 0, n)
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
+	if got, want := n, 0; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_WriteString_NoSpaceLeft(t *testing.T) {
@@ -1363,10 +1867,14 @@ func TestBuffer_WriteString_NoSpaceLeft(t *testing.T) {
 	defer bb.Close()
 
 	_, err := bb.WriteString("abc")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	_, err = bb.WriteString("d")
-	assert.IsType(t, ErrMaxSizeExceeded(0), err)
+	if _, ok := err.(ErrMaxSizeExceeded); !ok {
+		t.Errorf("error type = %T, want ErrMaxSizeExceeded", err)
+	}
 }
 
 func TestBuffer_ReadFrom_SpillsToDisk(t *testing.T) {
@@ -1375,13 +1883,21 @@ func TestBuffer_ReadFrom_SpillsToDisk(t *testing.T) {
 
 	r := strings.NewReader("hello world!!")
 	n, err := bb.ReadFrom(r)
-	require.NoError(t, err)
-	assert.Equal(t, int64(13), n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, int64(13); got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
 
 	_, _ = bb.Seek(0, io.SeekStart)
 	data, err := io.ReadAll(bb)
-	require.NoError(t, err)
-	assert.Equal(t, "hello world!!", string(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := string(data), "hello world!!"; got != want {
+		t.Errorf("string(data) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_ReadAt_AcrossBoundary(t *testing.T) {
@@ -1392,9 +1908,15 @@ func TestBuffer_ReadAt_AcrossBoundary(t *testing.T) {
 
 	buf := make([]byte, 6)
 	n, err := bb.ReadAt(buf, 1) // B C D(mem) E F G(file)
-	require.NoError(t, err)
-	assert.Equal(t, 6, n)
-	assert.Equal(t, "BCDEFG", string(buf))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 6; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := string(buf), "BCDEFG"; got != want {
+		t.Errorf("string(buf) = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_Read_AdvancesPosition(t *testing.T) {
@@ -1406,19 +1928,35 @@ func TestBuffer_Read_AdvancesPosition(t *testing.T) {
 
 	buf := make([]byte, 2)
 	n, err := bb.Read(buf)
-	require.NoError(t, err)
-	assert.Equal(t, 2, n)
-	assert.Equal(t, "AB", string(buf))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 2; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := string(buf), "AB"; got != want {
+		t.Errorf("string(buf) = %#v, want %#v", got, want)
+	}
 
 	n, err = bb.Read(buf)
-	require.NoError(t, err)
-	assert.Equal(t, 2, n)
-	assert.Equal(t, "CD", string(buf))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := n, 2; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := string(buf), "CD"; got != want {
+		t.Errorf("string(buf) = %#v, want %#v", got, want)
+	}
 
 	buf = make([]byte, 5)
 	n, err = bb.Read(buf)
-	assert.Equal(t, 1, n)
-	assert.Equal(t, byte('E'), buf[0])
+	if got, want := n, 1; got != want {
+		t.Errorf("n = %#v, want %#v", got, want)
+	}
+	if got, want := buf[0], byte('E'); got != want {
+		t.Errorf("buf[0] = %#v, want %#v", got, want)
+	}
 }
 
 func TestBuffer_WriteTo_WriterError(t *testing.T) {
@@ -1429,7 +1967,9 @@ func TestBuffer_WriteTo_WriterError(t *testing.T) {
 
 	w := &failWriter{}
 	_, err := bb.WriteTo(w)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
 
 type failWriter struct{}
@@ -1451,5 +1991,7 @@ func TestBuffer_WriteTo_FileWriterError(t *testing.T) {
 	// Now WriteTo writes from file, which should fail
 	w := &failWriter{}
 	_, err := bb.WriteTo(w)
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("err: expected an error")
+	}
 }
