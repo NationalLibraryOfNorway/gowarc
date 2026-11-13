@@ -1,13 +1,48 @@
-[![Test](https://github.com/nationallibraryofnorway/gowarc/actions/workflows/test.yml/badge.svg)](https://github.com/nationallibraryofnorway/gowarc/actions/workflows/test.yml)
-[![Release](https://img.shields.io/github/release/nationallibraryofnorway/gowarc.svg)](https://github.com/nationallibraryofnorway/gowarc/releases/latest)
-[![License](https://img.shields.io/github/license/nationallibraryofnorway/gowarc)](/LICENSE)
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/nationallibraryofnorway/gowarc/v3.svg)](https://pkg.go.dev/github.com/nationallibraryofnorway/gowarc/v3)
+[![Tests](https://github.com/nationallibraryofnorway/gowarc/actions/workflows/test.yml/badge.svg?event=push)](https://github.com/nationallibraryofnorway/gowarc/actions/workflows/test.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/nationallibraryofnorway/gowarc/v3.svg)](https://pkg.go.dev/github.com/nationallibraryofnorway/gowarc/v3)
+
+[Releases](https://github.com/nationallibraryofnorway/gowarc/releases) · [Apache-2.0 license](LICENSE)
 
 # gowarc
 
 A library for creating, parsing and evaluating WARC-files, written in go.
 
-### What is WARC?
+## Organization change: migrating from nlnwa
+
+gowarc is moving from **nlnwa** to **nationallibraryofnorway**, the same
+organization as whatwg-url. Releases under the new organization use the module
+path below; the package name `gowarc` and major-version suffix `/v3` stay the same.
+
+| Module | Previous path | New path |
+| --- | --- | --- |
+| gowarc | `github.com/nlnwa/gowarc/v3` | `github.com/nationallibraryofnorway/gowarc/v3` |
+| whatwg-url | `github.com/nlnwa/whatwg-url` | `github.com/nationallibraryofnorway/whatwg-url` |
+
+To upgrade to a release under the new organization:
+
+1. Use **Go 1.27 or later**, including in CI.
+2. Replace the old gowarc import prefix in your source, tests, and examples.
+   If you import whatwg-url directly, replace that prefix too, preserving
+   subpackage names such as `/url`.
+3. Update dependencies and run your tests:
+
+   ```bash
+   go get github.com/nationallibraryofnorway/gowarc/v3@latest
+   go mod tidy
+   go test ./...
+   ```
+
+This migration upgrades whatwg-url from v0.6.2 to v0.8.0. Options passed to
+`WithUrlParserOptions` must come from the new `whatwg-url/url` package; options
+from the old import path are different Go types. Review the
+[whatwg-url migration guide](https://github.com/nationallibraryofnorway/whatwg-url/blob/v0.8.0/README.md#upgrading-from-v062)
+for API changes, including `WithReportValidationErrors(bool)` and numeric ports
+in `WithSpecialSchemes(map[string]uint16)`.
+
+Parser options now also apply to WARC IDs and references. See
+[URI validation](#uri-validation) below for behavior changes to check when upgrading.
+
+## What is WARC?
 
 The WARC format offers a standard way to structure, manage and store billions of resources collected from the web and
 elsewhere. It is used to build applications for harvesting, managing, accessing, mining and exchanging content.
@@ -17,18 +52,11 @@ at https://iipc.github.io/warc-specifications/specifications/warc-format/warc-1.
 
 ## Library documentation
 
-### Requirements and migration
+### Requirements
 
-Go 1.27 or later is required. The module is now
-`github.com/nationallibraryofnorway/gowarc/v3`, and URL validation uses
-`github.com/nationallibraryofnorway/whatwg-url v0.8.0`.
+Go 1.27 or later is required. URL validation uses whatwg-url v0.8.0.
 
-To migrate, replace imports of `github.com/nlnwa/gowarc/v3` with the new
-module path. If you use `WithUrlParserOptions`, also replace imports of
-`github.com/nlnwa/whatwg-url/url` with
-`github.com/nationallibraryofnorway/whatwg-url/url`: parser options from the
-old package are different Go types and cannot be passed to the new API.
-Then update the dependency and run `go mod tidy`.
+### URI validation
 
 `WithUrlParserOptions` now applies to URI headers and the URIs inside WARC
 record IDs and identifier references. Repeated calls append options in order.
@@ -42,17 +70,13 @@ conformance fixes can change which inputs are accepted, but validation does
 not normalize stored URI text. Failed header validation also preserves the
 original value, including when a warning is returned.
 
-See the [whatwg-url migration guide](https://github.com/nationallibraryofnorway/whatwg-url/blob/v0.8.0/README.md#upgrading-from-v062)
-for changed parser options, including `WithReportValidationErrors(bool)` and
-numeric ports in `WithSpecialSchemes(map[string]uint16)`.
-
-#### Installation
+### Installation
 
 ```
 $ go get github.com/nationallibraryofnorway/gowarc/v3
 ```
 
-#### Create a new WARC record
+### Create a new WARC record
 
 To get you started, here is a simple example of how to create a new WARC record.
 
