@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -633,46 +634,55 @@ func TestBuffer_ReadAfterClose(t *testing.T) {
 }
 
 func TestBuffer_ConcurrentWrites(t *testing.T) {
-	// This test may expose race conditions if run with -race flag
-	bb := New()
-	defer bb.Close()
-
-	done := make(chan bool)
-	errors := make(chan error, 2)
-
-	// Two goroutines writing
-	go func() {
-		for i := 0; i < 100; i++ {
-			_, err := bb.Write([]byte("a"))
-			if err != nil {
-				errors <- err
-				done <- true
-				return
+	for _, memLimit := range []int{0, 32, 1024} {
+		t.Run(fmt.Sprint(memLimit), func(t *testing.T) {
+			bb := New(WithMaxMemBytes(memLimit), WithTmpDir(t.TempDir()))
+			defer bb.Close()
+			results := make(chan error, 2)
+			start := make(chan struct{})
+			for _, write := range []func() (int, error){
+				func() (int, error) { return bb.Write([]byte("a")) },
+				func() (int, error) { return bb.WriteString("b") },
+			} {
+				go func() {
+					<-start
+					for i := 0; i < 100; i++ {
+						n, err := write()
+						if err != nil {
+							results <- err
+							return
+						}
+						if n != 1 {
+							results <- io.ErrShortWrite
+							return
+						}
+					}
+					results <- nil
+				}()
 			}
-		}
-		done <- true
-	}()
-
-	go func() {
-		for i := 0; i < 100; i++ {
-			_, err := bb.Write([]byte("b"))
-			if err != nil {
-				errors <- err
-				done <- true
-				return
+			close(start)
+			// Join both writers before inspecting or closing the buffer.
+			err1, err2 := <-results, <-results
+			if err := err1; err != nil {
+				t.Fatalf("err1 error = %v", err)
 			}
-		}
-		done <- true
-	}()
-
-	// Wait for both
-	<-done
-	<-done
-	close(errors)
-
-	// Check for errors
-	for err := range errors {
-		t.Errorf("Concurrent write error: %v", err)
+			if err := err2; err != nil {
+				t.Fatalf("err2 error = %v", err)
+			}
+			if got, want := bb.Size(), int64(200); got != want {
+				t.Errorf("bb.Size() = %#v, want %#v", got, want)
+			}
+			data, err := io.ReadAll(bb)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got, want := bytes.Count(data, []byte("a")), 100; got != want {
+				t.Errorf("bytes.Count(data, []byte(\"a\")) = %#v, want %#v", got, want)
+			}
+			if got, want := bytes.Count(data, []byte("b")), 100; got != want {
+				t.Errorf("bytes.Count(data, []byte(\"b\")) = %#v, want %#v", got, want)
+			}
+		})
 	}
 }
 

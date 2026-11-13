@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sync"
 )
 
 const (
@@ -45,6 +46,8 @@ func (e ErrMaxSizeExceeded) Error() string {
 	return fmt.Sprintf("diskbuffer: maximum size %d exceeded", e)
 }
 
+// Buffer supports concurrent writes. Reads, inspection, and Close must not run
+// concurrently with writes; callers must synchronize those operations.
 type Buffer interface {
 	io.Reader
 	io.ReaderAt
@@ -65,7 +68,8 @@ type Buffer interface {
 // written to an in-memory buffer, then spills to a temporary file when the
 // memory limit is reached.
 type buffer struct {
-	tmpDir string
+	writeMu sync.Mutex
+	tmpDir  string
 
 	pos   int64
 	limit int64
@@ -170,6 +174,9 @@ func (b *buffer) Write(p []byte) (n int, err error) {
 }
 
 func (b *buffer) write(p []byte) (int, error) {
+	b.writeMu.Lock()
+	defer b.writeMu.Unlock()
+
 	if err := b.ensureOpen(); err != nil {
 		return 0, err
 	}
@@ -214,6 +221,9 @@ func (b *buffer) WriteString(s string) (int, error) {
 }
 
 func (b *buffer) writeString(s string) (int, error) {
+	b.writeMu.Lock()
+	defer b.writeMu.Unlock()
+
 	if err := b.ensureOpen(); err != nil {
 		return 0, err
 	}
