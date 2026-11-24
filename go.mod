@@ -5,6 +5,7 @@ go 1.27.0
 require (
 	github.com/klauspost/compress v1.20.4
 	github.com/nationallibraryofnorway/whatwg-url v0.9.0
+	golang.org/x/sys v0.50.0
 )
 
 require (

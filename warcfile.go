@@ -626,25 +626,6 @@ func contentLength(r WarcRecord) (int64, bool) {
 	return n, true
 }
 
-// rename renames a file and fsyncs the parent directory to persist the change.
-func rename(from, to string) error {
-	if err := os.Rename(from, to); err != nil {
-		return err
-	}
-
-	// A directory entry changed due to rename; fsync parent dir to persist rename.
-	pdir, err := os.Open(filepath.Dir(to))
-	if err != nil {
-		return err
-	}
-
-	if err = pdir.Sync(); err != nil {
-		_ = pdir.Close()
-		return err
-	}
-	return pdir.Close()
-}
-
 // Record represents a WARC record as read from a WARC file, including its
 // position within the file and any validation findings.
 type Record struct {
