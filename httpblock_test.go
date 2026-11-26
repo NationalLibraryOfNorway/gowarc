@@ -3,6 +3,7 @@ package gowarc
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -10,8 +11,149 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/nationallibraryofnorway/gowarc/v3/internal/diskbuffer"
+	"github.com/nationallibraryofnorway/gowarc/v4/internal/diskbuffer"
 )
+
+func TestHTTPTransferFramingDigests(t *testing.T) {
+	const chunks = "2;ext=yes\r\nhe\r\n3\r\nllo\r\n0\r\nX-Result: ok\r\n\r\n"
+	const chunkHeader = "Transfer-Encoding: chunked\r\nTrailer: X-Result\r\n\r\n"
+	for _, tc := range []struct {
+		name               string
+		typ                RecordType
+		head, body, entity string
+	}{
+		{"fixed", Response, "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n", "hello", "hello"},
+		{"chunked response", Response, "HTTP/1.1 200 OK\r\n" + chunkHeader, chunks, "hello"},
+		{"chunked request", Request, "POST / HTTP/1.1\r\nHost: example.org\r\n" + chunkHeader, chunks, "hello"},
+		{"empty chunked response", Response, "HTTP/1.1 200 OK\r\n" + chunkHeader, "0\r\nX-Result: ok\r\n\r\n", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := []WarcRecordOption{WithSpecViolationPolicy(ErrFail), WithAddMissingDigest(true), WithDefaultDigestEncoding(Base16), WithBufferMaxMemBytes(1)}
+			b := NewRecordBuilder(tc.typ, opts...)
+			b.AddWarcHeader(WarcDate, "2020-01-02T03:04:05Z")
+			b.AddWarcHeader(WarcTargetURI, "https://example.org/")
+			b.AddWarcHeader(ContentType, "application/http;msgtype="+tc.typ.String())
+			raw := tc.head + tc.body
+			if _, err := b.WriteString(raw); err != nil {
+				t.Fatal(err)
+			}
+			rec, warnings, err := b.Build()
+			if err != nil || len(warnings) != 0 {
+				t.Fatalf("build: %v, %v", err, warnings)
+			}
+			defer checkClose(t, rec)
+			check := func(rec WarcRecord) {
+				t.Helper()
+				block := rec.Block().(PayloadBlock)
+				for field, data := range map[string]string{WarcBlockDigest: raw, WarcPayloadDigest: tc.entity} {
+					want := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(data)))
+					if got := rec.WarcHeader().Get(field); got != want {
+						t.Errorf("%s = %s, want %s", field, got, want)
+					}
+				}
+				if got := block.PayloadDigest(); got != rec.WarcHeader().Get(WarcPayloadDigest) {
+					t.Errorf("PayloadDigest() = %s", got)
+				}
+				wire, err := block.PayloadBytes()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got, err := io.ReadAll(wire); err != nil || string(got) != tc.entity {
+					t.Errorf("HTTP entity = %q, %v", got, err)
+				}
+			}
+			check(rec)
+			var wire bytes.Buffer
+			if _, _, err := NewMarshaler().Marshal(&wire, rec, 0); err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.HasSuffix(wire.Bytes(), []byte(raw+"\r\n\r\n")) {
+				t.Fatal("serialized HTTP block differs from the original")
+			}
+			parsed, _, warnings, err := NewUnmarshaler(opts...).Unmarshal(bufio.NewReader(&wire))
+			if err != nil || len(warnings) != 0 {
+				t.Fatalf("unmarshal: %v, %v", err, warnings)
+			}
+			defer checkClose(t, parsed)
+			check(parsed)
+		})
+	}
+}
+
+func TestChunkedPayloadDigestValidation(t *testing.T) {
+	hash := func(s string) string { return fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(s))) }
+	const complete = "5\r\nhello\r\n0\r\n\r\n"
+	const head = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+	for _, tc := range []struct {
+		name, body, suppliedDigest string
+		truncated                  bool
+		policy                     ErrorPolicy
+		wantDigest, wantIssue      string
+	}{
+		{"legacy digest", complete, hash(complete), false, ErrFail, "", "payload: wrong digest"},
+		{"truncated chunk", "5\r\nhel", "", true, ErrFail, hash("hel"), ""},
+		{"invalid chunk", "5\r\nhello\r\noops\r\n", "", false, ErrWarn, "", "cannot determine chunked payload digest"},
+		{"missing trailer terminator", "5\r\nhello\r\n0\r\n", "", false, ErrWarn, "", "cannot determine chunked payload digest"},
+		{"malformed trailer", "0\r\nmissing-colon\r\n\r\n", "", false, ErrWarn, "", "cannot determine chunked payload digest"},
+		{"trailing garbage", "0\r\n\r\nextra", "", false, ErrWarn, "", "cannot determine chunked payload digest"},
+		{"invalid chunk with digest", "broken\r\n", hash(""), false, ErrFail, "", "cannot determine chunked payload digest"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := NewRecordBuilder(Response, WithSpecViolationPolicy(tc.policy), WithAddMissingDigest(true), WithDefaultDigestEncoding(Base16))
+			b.AddWarcHeader(WarcDate, "2020-01-02T03:04:05Z")
+			b.AddWarcHeader(WarcTargetURI, "https://example.org/")
+			b.AddWarcHeader(ContentType, "application/http;msgtype=response")
+			if tc.truncated {
+				b.AddWarcHeader(WarcTruncated, "length")
+			}
+			if tc.suppliedDigest != "" {
+				b.AddWarcHeader(WarcPayloadDigest, tc.suppliedDigest)
+			}
+			if _, err := b.WriteString(head + tc.body); err != nil {
+				t.Fatal(err)
+			}
+			rec, warnings, err := b.Build()
+			if tc.wantIssue != "" && tc.policy == ErrFail {
+				if err == nil || !strings.Contains(err.Error(), tc.wantIssue) {
+					t.Fatalf("build error = %v, want %q", err, tc.wantIssue)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer checkClose(t, rec)
+			if tc.wantIssue != "" {
+				if len(warnings) != 1 || !strings.Contains(warnings[0].Error(), tc.wantIssue) {
+					t.Fatalf("warnings = %v, want %q", warnings, tc.wantIssue)
+				}
+			} else if len(warnings) != 0 {
+				t.Fatal(warnings)
+			}
+			block := rec.Block().(HttpResponseBlock)
+			if raw := readHTTP(t, block.RawBytes); raw != head+tc.body {
+				t.Fatal("lost raw bytes")
+			}
+			reader, err := block.PayloadBytes()
+			if err != nil {
+				t.Fatal(err)
+			}
+			entity, err := io.ReadAll(reader)
+			if tc.wantIssue != "" && err == nil {
+				t.Fatal("payload read must report malformed framing")
+			}
+			if tc.truncated && (err != nil || string(entity) != "hel" || block.PayloadLength() != 3) {
+				t.Fatalf("truncated entity: %q, %v", entity, err)
+			}
+			if got := rec.WarcHeader().Get(WarcPayloadDigest); got != tc.wantDigest {
+				t.Errorf("payload digest = %q, want %q", got, tc.wantDigest)
+			}
+			if got := rec.WarcHeader().Get(WarcBlockDigest); got != hash(head+tc.body) {
+				t.Errorf("wrong block digest %s", got)
+			}
+		})
+	}
+}
 
 func Test_httpRequestBlock_BlockDigest(t *testing.T) {
 	content := "GET / HTTP/1.0\n" +
@@ -967,7 +1109,7 @@ func Test_httpResponseBlock_Cache_PayloadBytesError(t *testing.T) {
 }
 
 type failPayloadSeeker struct {
-	*strings.Reader
+	io.Reader
 	seekErr error
 }
 

@@ -13,6 +13,7 @@ import (
 func uriTestHeader() *WarcFields {
 	wf := &WarcFields{}
 	wf.Set(WarcType, "resource")
+	wf.Set(WarcTargetURI, "https://example.org/")
 	wf.Set(WarcRecordID, "<urn:example:record>")
 	wf.Set(WarcDate, "2026-11-13T12:00:00Z")
 	wf.Set(ContentLength, "0")
@@ -55,8 +56,10 @@ func TestWithUrlParserOptions(t *testing.T) {
 					switch field.name {
 					case WarcProfile, WarcRefersTo, WarcRefersToTargetURI:
 						wf.Set(WarcType, "revisit")
+						wf.Set(WarcProfile, ProfileServerNotModifiedV1_1)
 					case WarcSegmentOriginID:
 						wf.Set(WarcType, "continuation")
+						wf.Set(WarcSegmentNumber, "2")
 					}
 					value := tc.input
 					if field.bracketed {

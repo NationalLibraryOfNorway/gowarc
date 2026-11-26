@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/nationallibraryofnorway/gowarc/v3"
+	"github.com/nationallibraryofnorway/gowarc/v4"
 	"github.com/nationallibraryofnorway/whatwg-url/url"
 )
 
@@ -136,4 +136,38 @@ func ExampleNewWarcFileReader() {
 		// Do more with record as per needs
 	}
 
+}
+
+func ExampleHttpBlock() {
+	builder := gowarc.NewRecordBuilder(gowarc.Response, gowarc.WithDefaultDigestAlgorithm("sha1"))
+	builder.AddWarcHeader(gowarc.ContentType, "application/http;msgtype=response")
+	builder.AddWarcHeader(gowarc.WarcDate, "2020-01-02T03:04:05Z")
+	builder.AddWarcHeader(gowarc.WarcTargetURI, "https://example.org/")
+	raw := "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\nX-Result: ok\r\n\r\n"
+	if _, err := builder.WriteString(raw); err != nil {
+		panic(err)
+	}
+	record, _, err := builder.Build()
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err := record.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	block := record.Block().(gowarc.HttpBlock)
+	entity, err := block.PayloadBytes()
+	if err != nil {
+		panic(err)
+	}
+	body, err := io.ReadAll(entity)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(body), block.PayloadDigest())
+	fmt.Println(block.PayloadLength(), block.HasTrailers())
+	// Output:
+	// hello sha1:VL2MMHO4YXUKFWV63YHTWSBM3GXKSQ2N
+	// 5 true
 }

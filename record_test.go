@@ -43,6 +43,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 			"ServerNotModified profile",
 			createRecord1(Response,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
@@ -58,6 +59,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 				&WarcFields{
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcType, Value: "revisit"},
 					&nameValue{Name: WarcBlockDigest, Value: "sha256:2cc0e7fb965c2a0925cadf23cd03d4673a452edfd0b7f97b3a93f2c8466fd1bc"},
 					&nameValue{Name: WarcPayloadDigest, Value: "sha1:c37ffb221569c553a2476c22c7dad429f3492977"},
@@ -77,6 +79,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 			"ServerNotModified profile missing payload digest\"",
 			createRecord1(Response,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
@@ -91,6 +94,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 				&WarcFields{
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcType, Value: "revisit"},
 					&nameValue{Name: WarcBlockDigest, Value: "sha256:2cc0e7fb965c2a0925cadf23cd03d4673a452edfd0b7f97b3a93f2c8466fd1bc"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
@@ -109,6 +113,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 			"IdenticalPayloadDigest profile",
 			createRecord1(Response,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
@@ -124,6 +129,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 				&WarcFields{
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcType, Value: "revisit"},
 					&nameValue{Name: WarcBlockDigest, Value: "sha256:2cc0e7fb965c2a0925cadf23cd03d4673a452edfd0b7f97b3a93f2c8466fd1bc"},
 					&nameValue{Name: WarcPayloadDigest, Value: "sha1:c37ffb221569c553a2476c22c7dad429f3492977"},
@@ -143,6 +149,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 			"IdenticalPayloadDigest profile missing payload digest",
 			createRecord1(Response,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
@@ -160,6 +167,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 			"IdenticalPayloadDigest profile resource record missing payload digest",
 			createRecord1(Resource,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: ContentType, Value: "text/plain"},
@@ -172,6 +180,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 				&WarcFields{
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcType, Value: "revisit"},
 					&nameValue{Name: WarcBlockDigest, Value: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
 					&nameValue{Name: WarcPayloadDigest, Value: "sha1:c37ffb221569c553a2476c22c7dad429f3492977"},
@@ -189,6 +198,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 			"IdenticalPayloadDigest profile metadata record",
 			createRecord1(Resource,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: ContentType, Value: "text/plain"},
@@ -202,6 +212,7 @@ func Test_warcRecord_ToRevisitRecord(t *testing.T) {
 				&WarcFields{
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcType, Value: "revisit"},
 					&nameValue{Name: WarcBlockDigest, Value: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
 					&nameValue{Name: WarcPayloadDigest, Value: "sha1:c37ffb221569c553a2476c22c7dad429f3492977"},
@@ -338,7 +349,7 @@ func Test_warcRecord_Merge(t *testing.T) {
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "response"},
-					&nameValue{Name: WarcBlockDigest, Value: "sha1:6e9d6b234feebbf1ab618707217e577c3b83448a"},
+					&nameValue{Name: WarcBlockDigest, Value: "sha1:b285747ad7cc57aa74bce2e30b453c8d1cb71ba4"},
 					&nameValue{Name: WarcPayloadDigest, Value: "sha1:c37ffb221569c553a2476c22c7dad429f3492977"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
 					&nameValue{Name: ContentLength, Value: "257"},
@@ -398,7 +409,7 @@ func Test_warcRecord_Merge(t *testing.T) {
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "response"},
-					&nameValue{Name: WarcBlockDigest, Value: "sha1:6e9d6b234feebbf1ab618707217e577c3b83448a"},
+					&nameValue{Name: WarcBlockDigest, Value: "sha1:b285747ad7cc57aa74bce2e30b453c8d1cb71ba4"},
 					&nameValue{Name: WarcPayloadDigest, Value: "sha1:c37ffb221569c553a2476c22c7dad429f3492977"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
 					&nameValue{Name: ContentLength, Value: "257"},
@@ -458,10 +469,10 @@ func Test_warcRecord_Merge(t *testing.T) {
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "response"},
-					&nameValue{Name: WarcBlockDigest, Value: "sha1:6e9d6b234feebbf1ab618707217e577c3b83448a"},
+					&nameValue{Name: WarcBlockDigest, Value: "sha1:8b35138fbcbc9ea7c21fc8f5b265044054fd509c"},
 					&nameValue{Name: WarcPayloadDigest, Value: "sha1:c37ffb221569c553a2476c22c7dad429f3492977"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
-					&nameValue{Name: ContentLength, Value: "256"},
+					&nameValue{Name: ContentLength, Value: "258"},
 				},
 				"HTTP/1.1 200 OK\nDate: Tue, 19 Sep 2016 17:18:40 GMT\nServer: Apache/2.0.54 (Ubuntu)\n" +
 					"Last-Modified: Mon, 16 Jun 2013 22:28:51 GMT\nETag: \"3e45-67e-2ed02ec0\"\nAccept-Ranges: bytes\n" +
@@ -730,6 +741,7 @@ func Test_warcRecord_Merge_ErrorPaths(t *testing.T) {
 			"segmented record",
 			func() WarcRecord {
 				return createRecord1(Response, &WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000001>"},
 					&nameValue{Name: ContentType, Value: "text/plain"},
@@ -744,6 +756,7 @@ func Test_warcRecord_Merge_ErrorPaths(t *testing.T) {
 			"non-revisit non-segmented record",
 			func() WarcRecord {
 				return createRecord1(Response, &WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000001>"},
 					&nameValue{Name: ContentType, Value: "text/plain"},
@@ -757,6 +770,7 @@ func Test_warcRecord_Merge_ErrorPaths(t *testing.T) {
 			"revisit with zero referenced records",
 			func() WarcRecord {
 				return createRecord1(Revisit, &WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000001>"},
 					&nameValue{Name: ContentType, Value: "text/plain"},
@@ -771,6 +785,7 @@ func Test_warcRecord_Merge_ErrorPaths(t *testing.T) {
 			"revisit with two referenced records",
 			func() WarcRecord {
 				return createRecord1(Revisit, &WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000001>"},
 					&nameValue{Name: ContentType, Value: "text/plain"},
@@ -780,12 +795,14 @@ func Test_warcRecord_Merge_ErrorPaths(t *testing.T) {
 			},
 			func() []WarcRecord {
 				r1 := createRecord1(Response, &WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000002>"},
 					&nameValue{Name: ContentType, Value: "text/plain"},
 					&nameValue{Name: ContentLength, Value: "0"},
 				}, "")
 				r2 := createRecord1(Response, &WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000003>"},
 					&nameValue{Name: ContentType, Value: "text/plain"},
@@ -814,6 +831,7 @@ func Test_warcRecord_Merge_ErrorPaths(t *testing.T) {
 			},
 			func() []WarcRecord {
 				return []WarcRecord{createRecord1(Response, &WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000002>"},
 					&nameValue{Name: ContentType, Value: "text/plain"},
@@ -826,6 +844,7 @@ func Test_warcRecord_Merge_ErrorPaths(t *testing.T) {
 			"revisit merge with non-http block",
 			func() WarcRecord {
 				return createRecord1(Revisit, &WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000001>"},
 					&nameValue{Name: ContentType, Value: "text/plain"},
@@ -934,6 +953,7 @@ func Test_warcRecord_ToRevisitRecord_Errors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Record without payload digest
 			record := createRecord1(Response, &WarcFields{
+				&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 				&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 				&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 				&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
@@ -962,6 +982,7 @@ func Test_warcRecord_ToRevisitRecord_Errors(t *testing.T) {
 
 func Test_warcRecord_RevisitRef_NonRevisit(t *testing.T) {
 	record := createRecord1(Response, &WarcFields{
+		&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 		&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 		&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000001>"},
 		&nameValue{Name: ContentType, Value: "text/plain"},
@@ -984,6 +1005,7 @@ func Test_warcRecord_RevisitRef_NonRevisit(t *testing.T) {
 
 func Test_warcRecord_CreateRevisitRef_FromRevisit(t *testing.T) {
 	record := createRecord1(Revisit, &WarcFields{
+		&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 		&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 		&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000001>"},
 		&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
@@ -1049,6 +1071,7 @@ func Test_warcRecord_ValidateDigest_Paths(t *testing.T) {
 			WithFixDigest(false),
 			WithFixContentLength(false),
 			WithAddMissingDigest(false))
+		rb.AddWarcHeader(WarcTargetURI, "http://example.com/")
 		rb.AddWarcHeader(WarcRecordID, "<urn:uuid:00000000-0000-0000-0000-000000000001>")
 		rb.AddWarcHeader(WarcDate, "2024-01-01T00:00:00Z")
 		rb.AddWarcHeader(ContentType, "text/plain")
@@ -1086,6 +1109,7 @@ func Test_warcRecord_Close_NilCloser(t *testing.T) {
 
 func Test_warcRecord_String_Format(t *testing.T) {
 	record := createRecord1(Response, &WarcFields{
+		&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 		&nameValue{Name: WarcDate, Value: "2024-01-01T00:00:00Z"},
 		&nameValue{Name: WarcRecordID, Value: "<urn:uuid:00000000-0000-0000-0000-000000000001>"},
 		&nameValue{Name: ContentType, Value: "text/plain"},
@@ -1111,6 +1135,7 @@ func Test_warcRecord_String_Format(t *testing.T) {
 
 func Test_warcRecord_ToRevisitRecord_WithTargetUriAndDate(t *testing.T) {
 	record := createRecord1(Response, &WarcFields{
+		&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 		&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 		&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 		&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
@@ -1189,13 +1214,9 @@ func Test_warcRecord_Merge_ParseHeadersError_Response(t *testing.T) {
 		}
 	}()
 
-	// With ErrWarn syntax policy (from createRecord1), the merge should attempt CRLF append retry
 	got, err := revisitRecord.Merge(referencedRecord)
-	// The malformed headers will fail parseHeaders — since errSyntax is ErrWarn (not > ErrWarn),
-	// it goes to the retry path with CRLF appended. That'll still fail.
-	// The second parseHeaders error returns wr, err.
-	if got == nil {
-		t.Errorf("got = %v, want non-nil", got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
 	}
 	if err == nil {
 		t.Errorf("err: expected an error")
@@ -1235,8 +1256,8 @@ func Test_warcRecord_Merge_ParseHeadersError_Request(t *testing.T) {
 	}()
 
 	got, err := revisitRecord.Merge(referencedRecord)
-	if got == nil {
-		t.Errorf("got = %v, want non-nil", got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
 	}
 	if err == nil {
 		t.Errorf("err: expected an error")
@@ -1282,17 +1303,15 @@ func Test_warcRecord_Merge_ParseHeadersError_ErrFail(t *testing.T) {
 
 	// errSyntax=ErrFail, so first parseHeaders error returns immediately
 	got, err := revisitRecord.Merge(referencedRecord)
-	if got == nil {
-		t.Errorf("got = %v, want non-nil", got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
 	}
 	if err == nil {
 		t.Errorf("err: expected an error")
 	}
 }
 
-func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
-	// Create a revisit that will merge successfully, but the reference record block is not cached
-	// This exercises the "else { wr.headers.Delete(WarcBlockDigest) }" branch
+func Test_warcRecord_Merge_StreamedDonor(t *testing.T) {
 	revisitRecord := createRecord1(Revisit, &WarcFields{
 		&nameValue{Name: WarcTargetURI, Value: "http://example.com"},
 		&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
@@ -1311,8 +1330,6 @@ func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
 		}
 	}()
 
-	// Build a raw WARC record and unmarshal from a non-seekable reader to get an uncached block.
-	// NopCloser wraps the reader WITHOUT io.Seeker, so httpResponseBlock.IsCached() returns false.
 	rawWARC := "WARC/1.1\r\n" +
 		"WARC-Type: response\r\n" +
 		"WARC-Target-URI: http://example.com\r\n" +
@@ -1341,11 +1358,6 @@ func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
 		}
 	}()
 
-	// Confirm the block is NOT cached (non-seekable stream)
-	if got := referencedRecord.Block().IsCached(); got {
-		t.Errorf("referencedRecord.Block().IsCached() = %v, want false", got)
-	}
-
 	got, err := revisitRecord.Merge(referencedRecord)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1353,9 +1365,9 @@ func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
 	if got, want := got.Type(), Response; got != want {
 		t.Errorf("got.Type() = %#v, want %#v", got, want)
 	}
-	// WarcBlockDigest should have been deleted since ref block wasn't cached
-	if got := got.WarcHeader().Has(WarcBlockDigest); got {
-		t.Errorf("got.WarcHeader().Has(WarcBlockDigest) = %v, want false", got)
+	// The reconstructed digest covers the complete merged message.
+	if got := got.WarcHeader().Has(WarcBlockDigest); !got {
+		t.Errorf("got.WarcHeader().Has(WarcBlockDigest) = %v, want true", got)
 	}
 }
 
@@ -1478,6 +1490,7 @@ func Test_warcRecord_ValidateDigest_PayloadDigest_ErrFail(t *testing.T) {
 		WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrIgnore),
 		WithFixDigest(false), WithAddMissingDigest(false),
 		WithDefaultDigestEncoding(Base16))
+	builder.AddWarcHeader(WarcTargetURI, "http://example.com/")
 	_, err := builder.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ntest")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1503,6 +1516,7 @@ func Test_warcRecord_ValidateDigest_ContentLengthMismatch_ErrFail(t *testing.T) 
 		WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrIgnore),
 		WithFixDigest(false), WithAddMissingDigest(false),
 		WithDefaultDigestEncoding(Base16))
+	builder.AddWarcHeader(WarcTargetURI, "http://example.com/")
 	_, err := builder.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ntest")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

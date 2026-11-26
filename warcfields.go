@@ -78,12 +78,19 @@ func (wf *WarcFields) GetInt64(name string) (int64, error) {
 }
 
 // GetTime is like Get, but converts the field value to time.Time.
-// The field is expected to be in RFC 3339 format.
+// WARC dates also support reduced precision, which defaults to the start of
+// the given year, month, day, or minute.
 func (wf *WarcFields) GetTime(name string) (time.Time, error) {
 	if !wf.Has(name) {
 		return time.Time{}, fmt.Errorf("missing field %s", name)
 	}
-	return time.Parse(time.RFC3339, wf.Get(name))
+	value := wf.Get(name)
+	if canonical, _ := normalizeName(name); canonical == WarcDate || canonical == WarcRefersToDate {
+		if parsed, err := parseWARCDate(V1_1, value); err == nil {
+			return parsed, nil
+		}
+	}
+	return time.Parse(time.RFC3339, value)
 }
 
 // GetId is like Get, but removes the surrounding '<' and '>' from the field value.

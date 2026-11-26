@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+func checkClose(t testing.TB, c io.Closer) {
+	t.Helper()
+	if err := c.Close(); err != nil {
+		t.Errorf("closing %T: %v", c, err)
+	}
+}
+
 type cacheTest struct {
 	name         string
 	data         io.Reader

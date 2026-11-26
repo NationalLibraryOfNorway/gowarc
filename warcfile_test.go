@@ -33,8 +33,8 @@ import (
 )
 
 const (
-	uncompressedRecordSize               int64 = 529
-	uncompressedRecordWithWarcInfoIdSize int64 = 596
+	uncompressedRecordSize               int64 = 567
+	uncompressedRecordWithWarcInfoIdSize int64 = 634
 	uncompressedWarcinfoSize             int64 = 250
 )
 
@@ -1079,6 +1079,7 @@ func sumSizesMatching(t *testing.T, dir, fileNameRegex string) int64 {
 
 func createTestRecord() WarcRecord {
 	builder := NewRecordBuilder(Response, WithFixDigest(false), WithStrictValidation(), WithAddMissingDigest(false))
+	builder.AddWarcHeader(WarcTargetURI, "http://example.com/")
 	_, err := builder.WriteString("HTTP/1.1 200 OK\nDate: Tue, 19 Sep 2016 17:18:40 GMT\nServer: Apache/2.0.54 (Ubuntu)\n" +
 		"Last-Modified: Mon, 16 Jun 2013 22:28:51 GMT\nETag: \"3e45-67e-2ed02ec0\"\nAccept-Ranges: bytes\n" +
 		"Content-Length: 19\nConnection: close\nContent-Type: text/plain\n\nThis is the content\n")

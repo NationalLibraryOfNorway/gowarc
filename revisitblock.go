@@ -86,11 +86,8 @@ func newRevisitBlock(opts *warcRecordOptions, src Block) (*revisitBlock, error) 
 	}
 
 	switch v := src.(type) {
-	case HttpRequestBlock:
-		block.headerBytes = v.ProtocolHeaderBytes()
-		block.payloadDigestString = v.PayloadDigest()
-	case HttpResponseBlock:
-		block.headerBytes = v.ProtocolHeaderBytes()
+	case HttpBlock:
+		block.headerBytes = bytes.Clone(v.ProtocolHeaderBytes())
 		block.payloadDigestString = v.PayloadDigest()
 	case *genericBlock:
 	default:

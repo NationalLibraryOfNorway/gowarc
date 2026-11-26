@@ -24,7 +24,7 @@ import (
 	"io"
 
 	"github.com/klauspost/compress/gzip"
-	"github.com/nationallibraryofnorway/gowarc/v3/internal/countingreader"
+	"github.com/nationallibraryofnorway/gowarc/v4/internal/countingreader"
 )
 
 // Unmarshaler is the interface implemented by types that can unmarshal a WARC record.
@@ -151,10 +151,10 @@ func (u *unmarshaler) Unmarshal(b *bufio.Reader) (rec WarcRecord, offset int64, 
 
 	var version *WarcVersion
 
-	v := buf[5:]
-	if bytes.HasPrefix(v, v1_0) {
+	v := bytes.TrimSuffix(bytes.TrimSuffix(buf[5:], []byte{lf}), []byte{cr})
+	if bytes.Equal(v, v1_0) {
 		version = V1_0
-	} else if bytes.HasPrefix(v, v1_1) {
+	} else if bytes.Equal(v, v1_1) {
 		version = V1_1
 	} else {
 		version = &WarcVersion{txt: string(bytes.TrimSpace(v))}
@@ -235,6 +235,14 @@ func (u *unmarshaler) Unmarshal(b *bufio.Reader) (rec WarcRecord, offset int64, 
 	validation = append(validation, digestValidation...)
 	if err != nil {
 		return
+	}
+
+	// Preserve HTTP bodies before advancing the shared stream, even when
+	// validation is disabled.
+	if _, ok := record.block.(HttpBlock); ok && content.N() < length {
+		if err = record.block.Cache(); err != nil {
+			return
+		}
 	}
 
 	// Discard any remaining bytes in block not read by parseBlock

@@ -32,9 +32,9 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/gzip"
-	"github.com/nationallibraryofnorway/gowarc/v3/internal"
-	"github.com/nationallibraryofnorway/gowarc/v3/internal/countingreader"
-	"github.com/nationallibraryofnorway/gowarc/v3/internal/timestamp"
+	"github.com/nationallibraryofnorway/gowarc/v4/internal"
+	"github.com/nationallibraryofnorway/gowarc/v4/internal/countingreader"
+	"github.com/nationallibraryofnorway/gowarc/v4/internal/timestamp"
 )
 
 // WarcFileNameGenerator is the interface that wraps the NewWarcfileName function.
@@ -872,9 +872,9 @@ func WithFlush(flush bool) WarcFileWriterOption {
 	}
 }
 
-// WithSegmentation sets if writer should use segmentation for large WARC records.
-//
-// defaults to false
+// WithSegmentation passes a size hint to the marshaler when a file size limit
+// is configured. The default marshaler writes whole records, and the file
+// writer currently returns an error if a marshaler produces a continuation.
 func WithSegmentation() WarcFileWriterOption {
 	return func(o *warcFileWriterOptions) {
 		o.useSegmentation = true

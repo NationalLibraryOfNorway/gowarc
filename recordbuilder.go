@@ -19,9 +19,11 @@ package gowarc
 import (
 	"errors"
 	"io"
+	"slices"
+	"strconv"
 	"time"
 
-	"github.com/nationallibraryofnorway/gowarc/v3/internal/diskbuffer"
+	"github.com/nationallibraryofnorway/gowarc/v4/internal/diskbuffer"
 )
 
 type WarcRecordBuilder interface {
@@ -39,11 +41,12 @@ type WarcRecordBuilder interface {
 }
 
 type recordBuilder struct {
-	opts       *warcRecordOptions
-	version    *WarcVersion
-	headers    *WarcFields
-	recordType RecordType
-	content    diskbuffer.Buffer
+	opts         *warcRecordOptions
+	version      *WarcVersion
+	headers      *WarcFields
+	recordType   RecordType
+	content      diskbuffer.Buffer
+	headerSyntax []error
 }
 
 // Write implements the io.Writer interface
@@ -66,25 +69,30 @@ func (rb *recordBuilder) ReadFrom(r io.Reader) (n int64, err error) {
 
 // AddWarcHeader adds a new WARC header field with the given name and a string value to the record
 func (rb *recordBuilder) AddWarcHeader(name string, value string) {
+	if rb.opts.errSyntax != ErrIgnore {
+		if err := checkFieldSyntax(name, value, 0); err != nil {
+			rb.headerSyntax = append(rb.headerSyntax, err)
+		}
+	}
 	rb.headers.Add(name, value)
 }
 
 // AddWarcHeaderInt adds a new WARC header field with the given name and an int value to the record
 func (rb *recordBuilder) AddWarcHeaderInt(name string, value int) {
-	rb.headers.AddInt(name, value)
+	rb.AddWarcHeader(name, strconv.Itoa(value))
 }
 
 // AddWarcHeaderInt64 adds a new WARC header field with the given name and an int64 value to the record
 func (rb *recordBuilder) AddWarcHeaderInt64(name string, value int64) {
-	rb.headers.AddInt64(name, value)
+	rb.AddWarcHeader(name, strconv.FormatInt(value, 10))
 }
 
 // AddWarcHeaderTime adds a new WARC header field with the given name and a time.Time value to the record
 func (rb *recordBuilder) AddWarcHeaderTime(name string, value time.Time) {
 	if rb.version.id == V1_0.id {
-		rb.headers.AddTime(name, value)
+		rb.AddWarcHeader(name, value.UTC().Format(time.RFC3339))
 	} else {
-		rb.headers.AddTimeNano(name, value)
+		rb.AddWarcHeader(name, value.UTC().Format(time.RFC3339Nano))
 	}
 }
 
@@ -162,17 +170,16 @@ func (rb *recordBuilder) Build() (WarcRecord, []error, error) {
 }
 
 func (rb *recordBuilder) validate(wr *warcRecord) ([]error, error) {
+	if rb.opts.errSyntax == ErrFail && len(rb.headerSyntax) > 0 {
+		return nil, rb.headerSyntax[0]
+	}
 	size := rb.content.Size()
 	if !wr.WarcHeader().Has(ContentLength) {
 		wr.headers.SetInt64(ContentLength, size)
 	}
 
 	_, validation, err := validateHeader(rb.headers, wr.version, wr.opts)
-	if err != nil {
-		return validation, err
-	}
-
-	return validation, err
+	return slices.Concat(rb.headerSyntax, validation), err
 }
 
 // NewRecordBuilder initializes a WarcRecordBuilder used for creating a new record.
