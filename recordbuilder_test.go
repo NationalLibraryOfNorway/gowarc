@@ -17,6 +17,9 @@
 package gowarc
 
 import (
+	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -899,5 +902,84 @@ func TestRecordBuilder_Build_RecordIdFuncError(t *testing.T) {
 	}
 	if got, want := err.Error(), "id generation failed"; !strings.Contains(got, want) {
 		t.Errorf("err.Error() = %v, want to contain %v", got, want)
+	}
+}
+
+func TestRecordBuilderExtensionRoundTrip(t *testing.T) {
+	for _, version := range []*WarcVersion{V1_0, V1_1} {
+		t.Run(version.String(), func(t *testing.T) {
+			b := NewRecordBuilder(Metadata, WithVersion(version), WithStrictValidation())
+			b.AddWarcHeader(WarcDate, "2026-01-01T00:00:00Z")
+			names := []string{"WARC-Collection-ID", "Collection-ID"}
+			for _, name := range names {
+				b.AddWarcHeader(name, "blåbær")
+			}
+			r, w, err := b.Build()
+			if err != nil || len(w) != 0 {
+				t.Fatalf("Build: %v, %v", w, err)
+			}
+			defer r.Close()
+			var wire bytes.Buffer
+			if _, _, err := NewMarshaler().Marshal(&wire, r, 0); err != nil {
+				t.Fatal(err)
+			}
+			read, _, w, err := NewUnmarshaler(WithStrictValidation()).Unmarshal(bufio.NewReader(&wire))
+			if err != nil || len(w) != 0 {
+				t.Fatalf("Unmarshal: %v, %v", w, err)
+			}
+			defer read.Close()
+			for _, name := range names {
+				if got := read.WarcHeader().Get(name); got != "blåbær" {
+					t.Errorf("%s = %q", name, got)
+				}
+			}
+		})
+	}
+}
+
+func TestRecordBuilderFieldSyntaxPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		label, name, value string
+		typed              bool
+	}{
+		{"empty name", "", "x", false}, {"space in name", "X Bad", "42", true},
+		{"invalid UTF-8", "Collection-ID", "\xff", false}, {"control character", "Collection-ID", "a\x00b", false},
+		{"non-ASCII name before canonicalization", "WARC-BlocK-Digest", "sha1:abc", false},
+	} {
+		for _, policy := range []ErrorPolicy{ErrIgnore, ErrWarn, ErrFail} {
+			t.Run(fmt.Sprintf("%s/%d", tc.label, policy), func(t *testing.T) {
+				b := NewRecordBuilder(Metadata, WithSyntaxErrorPolicy(policy), WithSpecViolationPolicy(ErrIgnore))
+				if tc.typed {
+					b.AddWarcHeaderInt(tc.name, 42)
+				} else {
+					b.AddWarcHeader(tc.name, tc.value)
+				}
+				r, w, err := b.Build()
+				var syntax *SyntaxError
+				if policy == ErrFail {
+					if r != nil || len(w) != 0 || !errors.As(err, &syntax) || syntax.Line != 0 {
+						t.Fatalf("Build: %v, %v, %v", r, w, err)
+					}
+					return
+				}
+				if err != nil || r == nil {
+					t.Fatalf("Build: %v, %v", r, err)
+				}
+				defer r.Close()
+				if tc.name == "WARC-BlocK-Digest" && r.WarcHeader().Has(WarcBlockDigest) && r.WarcHeader().Get(WarcBlockDigest) == tc.value {
+					t.Error("non-ASCII field name became WARC-Block-Digest")
+				}
+				if got := r.WarcHeader().Get(tc.name); got != tc.value {
+					t.Errorf("stored value = %q", got)
+				}
+				if policy == ErrWarn {
+					if len(w) != 1 || !errors.As(w[0], &syntax) || syntax.Line != 0 {
+						t.Errorf("warnings = %v", w)
+					}
+				} else if len(w) != 0 {
+					t.Errorf("warnings = %v", w)
+				}
+			})
+		}
 	}
 }
