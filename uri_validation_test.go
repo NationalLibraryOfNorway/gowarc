@@ -56,8 +56,10 @@ func TestWithUrlParserOptions(t *testing.T) {
 					switch field.name {
 					case WarcProfile, WarcRefersTo, WarcRefersToTargetURI:
 						wf.Set(WarcType, "revisit")
+						wf.Set(WarcProfile, ProfileServerNotModifiedV1_1)
 					case WarcSegmentOriginID:
 						wf.Set(WarcType, "continuation")
+						wf.Set(WarcSegmentNumber, "2")
 					}
 					value := tc.input
 					if field.bracketed {

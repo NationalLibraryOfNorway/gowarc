@@ -151,10 +151,10 @@ func (u *unmarshaler) Unmarshal(b *bufio.Reader) (rec WarcRecord, offset int64, 
 
 	var version *WarcVersion
 
-	v := buf[5:]
-	if bytes.HasPrefix(v, v1_0) {
+	v := bytes.TrimSuffix(bytes.TrimSuffix(buf[5:], []byte{lf}), []byte{cr})
+	if bytes.Equal(v, v1_0) {
 		version = V1_0
-	} else if bytes.HasPrefix(v, v1_1) {
+	} else if bytes.Equal(v, v1_1) {
 		version = V1_1
 	} else {
 		version = &WarcVersion{txt: string(bytes.TrimSpace(v))}

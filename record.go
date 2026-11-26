@@ -319,7 +319,7 @@ func (wr *warcRecord) RevisitRef() (*RevisitRef, error) {
 	}
 
 	return &RevisitRef{
-		Profile:        wr.headers.Get(WarcProfile),
+		Profile:        unbracketWARC10URI(wr.version, wr.headers.Get(WarcProfile)),
 		TargetRecordId: wr.headers.GetId(WarcRefersTo),
 		TargetUri:      wr.headers.Get(WarcRefersToTargetURI),
 		TargetDate:     wr.headers.Get(WarcRefersToDate),
@@ -334,13 +334,13 @@ func (wr *warcRecord) CreateRevisitRef(profile string) (*RevisitRef, error) {
 	return &RevisitRef{
 		Profile:        profile,
 		TargetRecordId: wr.headers.GetId(WarcRecordID),
-		TargetUri:      wr.headers.Get(WarcTargetURI),
+		TargetUri:      unbracketWARC10URI(wr.version, wr.headers.Get(WarcTargetURI)),
 		TargetDate:     wr.headers.Get(WarcDate),
 	}, nil
 }
 
 func (wr *warcRecord) Merge(record ...WarcRecord) (WarcRecord, error) {
-	if wr.headers.Get(WarcSegmentNumber) == "1" {
+	if number, _ := wr.headers.GetInt(WarcSegmentNumber); number == 1 {
 		return nil, ErrMergeSegmentedNotImplemented
 	}
 	if wr.recordType != Revisit {

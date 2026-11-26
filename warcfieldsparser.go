@@ -25,6 +25,7 @@ import (
 	"io"
 	"mime"
 	"strings"
+	"unicode/utf8"
 )
 
 var (
@@ -84,7 +85,22 @@ func (p *warcfieldsParser) parseLine(line []byte, nv WarcFields) (WarcFields, er
 	value := trimFieldString(l[colonPos+1:])
 
 	nv.Add(name, value)
+	if p.Options.errSyntax > ErrIgnore {
+		return nv, checkFieldSyntax(l[:colonPos], value, p.lineNumber)
+	}
 	return nv, nil
+}
+
+func checkFieldSyntax(name, value string, line int) error {
+	if !isHeaderToken(name) {
+		return newSyntaxErrorAtLine("invalid header field name", line)
+	}
+	if !utf8.ValidString(value) || strings.ContainsFunc(value, func(r rune) bool {
+		return r < ' ' && r != '\t' || r == 127
+	}) {
+		return newSyntaxErrorAtLine("invalid header field value", line)
+	}
+	return nil
 }
 
 // readLine reads the next line from r.
