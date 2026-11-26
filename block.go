@@ -20,7 +20,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/nationallibraryofnorway/gowarc/v3/internal/diskbuffer"
+	"github.com/nationallibraryofnorway/gowarc/v4/internal/diskbuffer"
 )
 
 // Block is the interface used to represent the content of a WARC record as specified by the WARC specification:
@@ -45,7 +45,11 @@ type Block interface {
 // Ref: https://iipc.github.io/warc-specifications/specifications/warc-format/warc-1.1/#warc-record-payload
 type PayloadBlock interface {
 	Block
+	// For HTTP blocks, PayloadBytes returns the entity body with chunk framing and trailers
+	// removed. Content encodings such as gzip are preserved.
 	PayloadBytes() (io.Reader, error)
+	// For chunked HTTP blocks, PayloadDigest hashes only the chunk data.
+	// It returns an empty string if the payload digest cannot be determined.
 	PayloadDigest() string
 }
 

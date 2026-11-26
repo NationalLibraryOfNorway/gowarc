@@ -17,11 +17,16 @@
 package gowarc
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io"
+	"net/http/httputil"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nationallibraryofnorway/gowarc/v4/internal/diskbuffer"
 )
 
 const (
@@ -85,7 +90,8 @@ type WarcRecord interface {
 	// The RevisitRef might be used by another record's ToRevisitRecord to create a revisit record referencing this record.
 	CreateRevisitRef(profile string) (*RevisitRef, error)
 
-	// Merge merges this record with its referenced record(s)
+	// Merge reconstructs an independently owned record from this revisit and its donor.
+	// Close the returned record to release its storage.
 	//
 	// It is implemented only for revisit records, but this function will be enhanced to also support segmented records.
 	Merge(record ...WarcRecord) (WarcRecord, error)
@@ -268,13 +274,15 @@ func (wr *warcRecord) ToRevisitRecord(ref *RevisitRef) (WarcRecord, error) {
 	h := wr.headers.clone()
 
 	switch ref.Profile {
-	case ProfileIdenticalPayloadDigestV1_0:
-		fallthrough
-	case ProfileIdenticalPayloadDigestV1_1:
+	case ProfileIdenticalPayloadDigestV1_0, ProfileIdenticalPayloadDigestV1_1:
+		b, parsedHTTP := wr.block.(HttpBlock)
+		if parsedHTTP && b.HasTrailers() {
+			return nil, ErrRevisitHasTrailers
+		}
 		if !h.Has(WarcPayloadDigest) && wr.recordType == Resource && h.Has(WarcBlockDigest) {
 			h.Set(WarcPayloadDigest, h.Get(WarcBlockDigest))
 		}
-		if !h.Has(WarcPayloadDigest) {
+		if !h.Has(WarcPayloadDigest) || (parsedHTTP && b.PayloadDigest() == "") {
 			return nil, ErrMissingPayloadDigest
 		}
 	case ProfileServerNotModifiedV1_0:
@@ -350,70 +358,115 @@ func (wr *warcRecord) Merge(record ...WarcRecord) (WarcRecord, error) {
 		return nil, ErrMergeRequiresOneRecord
 	}
 
-	wr.recordType = record[0].Type()
-	wr.headers.Set(WarcType, record[0].Type().String())
-	wr.headers.Delete(WarcRefersTo)
-	wr.headers.Delete(WarcRefersToTargetURI)
-	wr.headers.Delete(WarcRefersToDate)
-	wr.headers.Delete(WarcProfile)
-	if record[0].WarcHeader().Has(WarcTruncated) {
-		wr.headers.Set(WarcTruncated, record[0].WarcHeader().Get(WarcTruncated))
-	} else {
-		wr.headers.Delete(WarcTruncated)
-	}
-
-	b, ok := wr.block.(*revisitBlock)
+	revisit, ok := wr.block.(*revisitBlock)
 	if !ok {
 		return nil, ErrMergeWrongBlockType
 	}
+	donor := record[0]
+	h := wr.headers.clone()
+	merged := &warcRecord{opts: wr.opts, version: wr.version, headers: h, recordType: donor.Type()}
+	ref, _ := wr.RevisitRef()
+	h.Set(WarcType, donor.Type().String())
+	for _, field := range []string{WarcRefersTo, WarcRefersToTargetURI, WarcRefersToDate, WarcProfile, WarcTruncated} {
+		h.Delete(field)
+	}
+	if donor.WarcHeader().Has(WarcTruncated) {
+		h.Set(WarcTruncated, donor.WarcHeader().Get(WarcTruncated))
+	}
 
-	switch v := record[0].Block().(type) {
-	case *httpRequestBlock:
-		refLen, err := record[0].WarcHeader().GetInt64(ContentLength)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse %s", ContentLength)
-		}
-		size := int64(len(b.headerBytes)) + refLen - int64(len(v.httpHeaderBytes))
-		wr.headers.SetInt64(ContentLength, size)
-		v.httpHeaderBytes = b.headerBytes
-		wr.block = v
-		if err := v.parseHeaders(v.httpHeaderBytes); err != nil {
-			if wr.opts.errSyntax > ErrWarn {
-				return wr, err
-			}
-			v.httpHeaderBytes = append(v.httpHeaderBytes, cr, lf)
-			if err := v.parseHeaders(v.httpHeaderBytes); err != nil {
-				return wr, err
-			}
-		}
-	case *httpResponseBlock:
-		refLen, err := record[0].WarcHeader().GetInt64(ContentLength)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse %s", ContentLength)
-		}
-		size := int64(len(b.headerBytes)) + refLen - int64(len(v.httpHeaderBytes))
-		wr.headers.SetInt64(ContentLength, size)
-		v.httpHeaderBytes = b.headerBytes
-		wr.block = v
-		if err := v.parseHeaders(v.httpHeaderBytes); err != nil {
-			if wr.opts.errSyntax > ErrWarn {
-				return wr, err
-			}
-			v.httpHeaderBytes = append(v.httpHeaderBytes, cr, lf)
-			if err := v.parseHeaders(v.httpHeaderBytes); err != nil {
-				return wr, err
-			}
-		}
+	bd, err := newDigestFromField(merged, WarcBlockDigest)
+	if err != nil {
+		return nil, err
+	}
+	pd, err := newDigestFromField(merged, WarcPayloadDigest)
+	if err != nil {
+		return nil, err
+	}
+	base := &baseHttpBlock{genericBlock: &genericBlock{opts: wr.opts, blockDigest: bd}, payloadDigest: pd}
+	var parse func([]byte) error
+
+	switch donor.Block().(type) {
+	case HttpRequestBlock:
+		b := &httpRequestBlock{baseHttpBlock: base}
+		merged.block, parse = b, b.parseHeaders
+	case HttpResponseBlock:
+		b := &httpResponseBlock{baseHttpBlock: base}
+		merged.block, parse = b, b.parseHeaders
 	default:
 		return nil, ErrMergeUnsupportedBlock
 	}
-	if record[0].Block().IsCached() {
-		wr.headers.Set(WarcBlockDigest, record[0].Block().BlockDigest())
-	} else {
-		wr.headers.Delete(WarcBlockDigest)
+	head, err := headerBytes(bufio.NewReader(bytes.NewReader(revisit.headerBytes)))
+	if err != nil {
+		if wr.opts.errSyntax == ErrFail {
+			return nil, err
+		}
+		head = append(head, cr, lf)
 	}
+	if err := parse(head); err != nil {
+		return nil, err
+	}
+	checkLength := true
+	if resp, ok := merged.block.(*httpResponseBlock); ok {
+		checkLength = resp.httpStatusCode >= 200 && resp.httpStatusCode != 204 && resp.httpStatusCode != 304
+	}
+	base.httpHeaderBytes = head
+	bd.Write(head)
+	entity, err := donor.Block().(PayloadBlock).PayloadBytes()
+	if err != nil {
+		return nil, err
+	}
+	buf := diskbuffer.New(wr.opts.bufferOptions...)
+	if err := writeRevisitEntity(io.MultiWriter(buf, bd), base, io.TeeReader(entity, pd), checkLength); err != nil {
+		buf.Close()
+		return nil, err
+	}
+	base.payload = buf
+	merged.closer = buf.Close
+	base.decodedLength = pd.count
+	base.blockDigestString = bd.format()
+	base.payloadDigestString = pd.format()
+	h.Set(WarcBlockDigest, base.blockDigestString)
+	bd.updateDigest()
+	h.SetInt64(ContentLength, base.Size())
+	if ref.Profile == ProfileIdenticalPayloadDigestV1_0 || ref.Profile == ProfileIdenticalPayloadDigestV1_1 {
+		if pd.hash != "" {
+			if err := pd.validate(); err != nil {
+				merged.Close()
+				return nil, fmt.Errorf("revisit payload: %w", err)
+			}
+		} else {
+			h.Set(WarcPayloadDigest, base.PayloadDigest())
+		}
+	}
+	return merged, nil
+}
 
-	return wr, nil
+func writeRevisitEntity(buf io.Writer, base *baseHttpBlock, entity io.Reader, checkLength bool) error {
+	if base.chunked {
+		chunks := httputil.NewChunkedWriter(buf)
+		if _, err := io.Copy(chunks, entity); err != nil {
+			return err
+		}
+		if err := chunks.Close(); err != nil {
+			return err
+		}
+		_, err := buf.Write(crlf)
+		return err
+	}
+	n, err := io.Copy(buf, entity)
+	if err != nil {
+		return err
+	}
+	if field := base.httpHeader.Get("Content-Length"); checkLength && field != "" {
+		expected, err := strconv.ParseInt(field, 10, 64)
+		if err != nil {
+			return err
+		}
+		if expected != n {
+			return fmt.Errorf("HTTP Content-Length: %w", &ContentLengthError{Expected: expected, Actual: n})
+		}
+	}
+	return nil
 }
 
 func (wr *warcRecord) parseBlock(reader io.Reader) (validation []error, err error) {
@@ -464,7 +517,7 @@ func (wr *warcRecord) parseBlock(reader io.Reader) (validation []error, err erro
 //	[ErrWarn]: non-fatal findings are collected in validation; err is nil.
 //	[ErrFail]: the first validation failure is returned via err.
 func (wr *warcRecord) ValidateDigest() (validation []error, err error) {
-	if wr.opts.errSpec > ErrIgnore {
+	if wr.opts.errSpec > ErrIgnore || wr.opts.addMissingDigest {
 		if err = wr.Block().Cache(); err != nil {
 			return nil, err
 		}
@@ -487,6 +540,7 @@ func (wr *warcRecord) ValidateDigest() (validation []error, err error) {
 	}
 
 	var blockDigest, payloadDigest *digest
+	var payloadDigestErr error
 	switch v := wr.Block().(type) {
 	case *genericBlock:
 		blockDigest = v.blockDigest
@@ -496,9 +550,11 @@ func (wr *warcRecord) ValidateDigest() (validation []error, err error) {
 	case *httpRequestBlock:
 		blockDigest = v.blockDigest
 		payloadDigest = v.payloadDigest
+		payloadDigestErr = v.payloadDigestErr
 	case *httpResponseBlock:
 		blockDigest = v.blockDigest
 		payloadDigest = v.payloadDigest
+		payloadDigestErr = v.payloadDigestErr
 	case *revisitBlock:
 		blockDigest = v.blockDigest
 	case *warcFieldsBlock:
@@ -535,6 +591,19 @@ func (wr *warcRecord) ValidateDigest() (validation []error, err error) {
 		return validation, nil
 	}
 
+	if payloadDigestErr != nil {
+		policy := wr.opts.errBlock
+		if wr.headers.Has(WarcPayloadDigest) || wr.opts.addMissingDigest {
+			policy = max(policy, wr.opts.errSpec)
+		}
+		switch policy {
+		case ErrFail:
+			return nil, payloadDigestErr
+		case ErrWarn:
+			validation = append(validation, payloadDigestErr)
+		}
+		return validation, nil
+	}
 	if payloadDigest != nil {
 		if payloadDigest.hash == "" {
 			// Missing digest header is allowed, so skip validation. But if addMissingDigest option is set, a header will be added.

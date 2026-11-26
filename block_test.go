@@ -24,7 +24,7 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/nationallibraryofnorway/gowarc/v3/internal/diskbuffer"
+	"github.com/nationallibraryofnorway/gowarc/v4/internal/diskbuffer"
 )
 
 func Test_genericBlock_BlockDigest(t *testing.T) {

@@ -33,6 +33,9 @@ var (
 	// ErrUnknownRevisitProfile is returned when a revisit record references an unrecognized profile URI.
 	ErrUnknownRevisitProfile = errors.New("gowarc: unknown revisit profile")
 
+	// ErrRevisitHasTrailers indicates that conversion would lose archived HTTP fields.
+	ErrRevisitHasTrailers = errors.New("gowarc: identical-payload revisit would discard HTTP trailers")
+
 	// ErrMissingPayloadDigest is returned when the identical-payload-digest profile is used but no payload digest is available.
 	ErrMissingPayloadDigest = errors.New("gowarc: payload digest required for identical-payload-digest profile")
 

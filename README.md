@@ -1,5 +1,5 @@
 [![Tests](https://github.com/nationallibraryofnorway/gowarc/actions/workflows/test.yml/badge.svg?event=push)](https://github.com/nationallibraryofnorway/gowarc/actions/workflows/test.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/nationallibraryofnorway/gowarc/v3.svg)](https://pkg.go.dev/github.com/nationallibraryofnorway/gowarc/v3)
+[![Go Reference](https://pkg.go.dev/badge/github.com/nationallibraryofnorway/gowarc/v4.svg)](https://pkg.go.dev/github.com/nationallibraryofnorway/gowarc/v4)
 
 [Releases](https://github.com/nationallibraryofnorway/gowarc/releases) · [Apache-2.0 license](LICENSE)
 
@@ -7,40 +7,49 @@
 
 A library for creating, parsing and evaluating WARC-files, written in go.
 
-## Organization change: migrating from nlnwa
+## Migrating to v4.0.0
 
-gowarc is moving from **nlnwa** to **nationallibraryofnorway**, the same
-organization as whatwg-url. Releases under the new organization use the module
-path below; the package name `gowarc` and major-version suffix `/v3` stay the same.
+Use Go 1.27 or later. Change gowarc imports in source, tests, and examples to
+`github.com/nationallibraryofnorway/gowarc/v4`, then run:
 
-| Module | Previous path | New path |
+```sh
+go get github.com/nationallibraryofnorway/gowarc/v4@v4.0.0
+go mod tidy
+go test ./...
+```
+
+Use `RawBytes()` to copy an archived HTTP message and `PayloadBytes()` to read
+or verify its entity. This applies to requests and responses.
+
+| Reader | Bytes returned | Matching WARC header |
 | --- | --- | --- |
-| gowarc | `github.com/nlnwa/gowarc/v3` | `github.com/nationallibraryofnorway/gowarc/v3` |
-| whatwg-url | `github.com/nlnwa/whatwg-url` | `github.com/nationallibraryofnorway/whatwg-url` |
+| `RawBytes()` | Complete stored HTTP message, including headers, chunk framing and trailers | `WARC-Block-Digest` |
+| `PayloadBytes()` | Entity body after removing chunk framing and trailers, with content encodings such as gzip preserved | `WARC-Payload-Digest` |
 
-To upgrade to a release under the new organization:
+`PayloadLength()` reports the decoded byte count. `HasTrailers()` reports
+actual trailer fields, including undeclared fields. Malformed chunk framing
+causes a payload read error and prevents digest generation. An explicitly
+truncated capture ending mid-chunk yields the recoverable entity bytes.
 
-1. Use **Go 1.27 or later**, including in CI.
-2. Replace the old gowarc import prefix in your source, tests, and examples.
-   If you import whatwg-url directly, replace that prefix too, preserving
-   subpackage names such as `/url`.
-3. Update dependencies and run your tests:
+This follows the [community annotation to WARC 1.1](https://iipc.github.io/warc-specifications/specifications/warc-format/warc-1.1-annotated/#warc-payload-digest)
+and matches [Zeno’s response recorder](https://github.com/internetarchive/gowarc/blob/v0.8.103/dialer.go#L657-L704).
+For archives retaining HTTP chunk framing, warcio 1.8.2 can report a mismatch
+because it hashes the stored body including framing. Older gowarc records with
+that digest also fail v4 payload validation. The default warning policy
+preserves the stored header. To repair it, enable `WithFixDigest(true)` with
+`WithSpecViolationPolicy(ErrWarn)`, then serialize the record. Repair changes
+the digest used to look up identical-payload revisits.
 
-   ```bash
-   go get github.com/nationallibraryofnorway/gowarc/v3@latest
-   go mod tidy
-   go test ./...
-   ```
+Keep the full capture when `errors.Is(err, gowarc.ErrRevisitHasTrailers)`
+holds after `ToRevisitRecord`. An empty trailer section remains eligible.
+`Merge` returns a separately owned record. Close it when finished. It uses
+the revisit's HTTP headers and the donor entity, regenerates framing and
+recomputes the block digest and length.
 
-This migration upgrades whatwg-url from v0.6.2 to v0.8.0. Options passed to
-`WithUrlParserOptions` must come from the new `whatwg-url/url` package; options
-from the old import path are different Go types. Review the
-[whatwg-url migration guide](https://github.com/nationallibraryofnorway/whatwg-url/blob/v0.8.0/README.md#upgrading-from-v062)
-for API changes, including `WithReportValidationErrors(bool)` and numeric ports
-in `WithSpecialSchemes(map[string]uint16)`.
-
-Parser options now also apply to WARC IDs and references. See
-[URI validation](#uri-validation) below for behavior changes to check when upgrading.
+Callers migrating from `github.com/nlnwa/gowarc/v3` should also update any
+direct whatwg-url imports to `github.com/nationallibraryofnorway/whatwg-url`.
+Options passed to `WithUrlParserOptions` must use types from the new module.
+See [URI validation](#uri-validation) for parsing changes.
 
 ## What is WARC?
 
@@ -54,7 +63,7 @@ at https://iipc.github.io/warc-specifications/specifications/warc-format/warc-1.
 
 ### Requirements
 
-Go 1.27 or later is required. URL validation uses whatwg-url v0.8.0.
+Go 1.27 or later is required. URL validation uses whatwg-url v0.9.0.
 
 ### URI validation
 
@@ -73,7 +82,7 @@ original value, including when a warning is returned.
 ### Installation
 
 ```
-$ go get github.com/nationallibraryofnorway/gowarc/v3
+$ go get github.com/nationallibraryofnorway/gowarc/v4
 ```
 
 ### Create a new WARC record
@@ -85,7 +94,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/nationallibraryofnorway/gowarc/v3"
+	"github.com/nationallibraryofnorway/gowarc/v4"
 )
 
 func main() {
@@ -110,7 +119,7 @@ func main() {
 
 ### godoc
 
-For complete documentation and examples consult the godoc online at: https://pkg.go.dev/github.com/nationallibraryofnorway/gowarc/v3
+For complete documentation and examples consult the godoc online at: https://pkg.go.dev/github.com/nationallibraryofnorway/gowarc/v4
 
 
 ## Command line tools

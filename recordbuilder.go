@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/nationallibraryofnorway/gowarc/v3/internal/diskbuffer"
+	"github.com/nationallibraryofnorway/gowarc/v4/internal/diskbuffer"
 )
 
 type WarcRecordBuilder interface {

@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nationallibraryofnorway/gowarc/v3/internal/timestamp"
+	"github.com/nationallibraryofnorway/gowarc/v4/internal/timestamp"
 )
 
 type TestData struct {

@@ -349,7 +349,7 @@ func Test_warcRecord_Merge(t *testing.T) {
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "response"},
-					&nameValue{Name: WarcBlockDigest, Value: "sha1:6e9d6b234feebbf1ab618707217e577c3b83448a"},
+					&nameValue{Name: WarcBlockDigest, Value: "sha1:b285747ad7cc57aa74bce2e30b453c8d1cb71ba4"},
 					&nameValue{Name: WarcPayloadDigest, Value: "sha1:c37ffb221569c553a2476c22c7dad429f3492977"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
 					&nameValue{Name: ContentLength, Value: "257"},
@@ -409,7 +409,7 @@ func Test_warcRecord_Merge(t *testing.T) {
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "response"},
-					&nameValue{Name: WarcBlockDigest, Value: "sha1:6e9d6b234feebbf1ab618707217e577c3b83448a"},
+					&nameValue{Name: WarcBlockDigest, Value: "sha1:b285747ad7cc57aa74bce2e30b453c8d1cb71ba4"},
 					&nameValue{Name: WarcPayloadDigest, Value: "sha1:c37ffb221569c553a2476c22c7dad429f3492977"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
 					&nameValue{Name: ContentLength, Value: "257"},
@@ -469,10 +469,10 @@ func Test_warcRecord_Merge(t *testing.T) {
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "response"},
-					&nameValue{Name: WarcBlockDigest, Value: "sha1:6e9d6b234feebbf1ab618707217e577c3b83448a"},
+					&nameValue{Name: WarcBlockDigest, Value: "sha1:8b35138fbcbc9ea7c21fc8f5b265044054fd509c"},
 					&nameValue{Name: WarcPayloadDigest, Value: "sha1:c37ffb221569c553a2476c22c7dad429f3492977"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
-					&nameValue{Name: ContentLength, Value: "256"},
+					&nameValue{Name: ContentLength, Value: "258"},
 				},
 				"HTTP/1.1 200 OK\nDate: Tue, 19 Sep 2016 17:18:40 GMT\nServer: Apache/2.0.54 (Ubuntu)\n" +
 					"Last-Modified: Mon, 16 Jun 2013 22:28:51 GMT\nETag: \"3e45-67e-2ed02ec0\"\nAccept-Ranges: bytes\n" +
@@ -1214,13 +1214,9 @@ func Test_warcRecord_Merge_ParseHeadersError_Response(t *testing.T) {
 		}
 	}()
 
-	// With ErrWarn syntax policy (from createRecord1), the merge should attempt CRLF append retry
 	got, err := revisitRecord.Merge(referencedRecord)
-	// The malformed headers will fail parseHeaders — since errSyntax is ErrWarn (not > ErrWarn),
-	// it goes to the retry path with CRLF appended. That'll still fail.
-	// The second parseHeaders error returns wr, err.
-	if got == nil {
-		t.Errorf("got = %v, want non-nil", got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
 	}
 	if err == nil {
 		t.Errorf("err: expected an error")
@@ -1260,8 +1256,8 @@ func Test_warcRecord_Merge_ParseHeadersError_Request(t *testing.T) {
 	}()
 
 	got, err := revisitRecord.Merge(referencedRecord)
-	if got == nil {
-		t.Errorf("got = %v, want non-nil", got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
 	}
 	if err == nil {
 		t.Errorf("err: expected an error")
@@ -1307,17 +1303,15 @@ func Test_warcRecord_Merge_ParseHeadersError_ErrFail(t *testing.T) {
 
 	// errSyntax=ErrFail, so first parseHeaders error returns immediately
 	got, err := revisitRecord.Merge(referencedRecord)
-	if got == nil {
-		t.Errorf("got = %v, want non-nil", got)
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
 	}
 	if err == nil {
 		t.Errorf("err: expected an error")
 	}
 }
 
-func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
-	// Create a revisit that will merge successfully, but the reference record block is not cached
-	// This exercises the "else { wr.headers.Delete(WarcBlockDigest) }" branch
+func Test_warcRecord_Merge_StreamedDonor(t *testing.T) {
 	revisitRecord := createRecord1(Revisit, &WarcFields{
 		&nameValue{Name: WarcTargetURI, Value: "http://example.com"},
 		&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
@@ -1336,8 +1330,6 @@ func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
 		}
 	}()
 
-	// Build a raw WARC record and unmarshal from a non-seekable reader to get an uncached block.
-	// NopCloser wraps the reader WITHOUT io.Seeker, so httpResponseBlock.IsCached() returns false.
 	rawWARC := "WARC/1.1\r\n" +
 		"WARC-Type: response\r\n" +
 		"WARC-Target-URI: http://example.com\r\n" +
@@ -1366,11 +1358,6 @@ func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
 		}
 	}()
 
-	// Confirm the block is NOT cached (non-seekable stream)
-	if got := referencedRecord.Block().IsCached(); got {
-		t.Errorf("referencedRecord.Block().IsCached() = %v, want false", got)
-	}
-
 	got, err := revisitRecord.Merge(referencedRecord)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1378,9 +1365,9 @@ func Test_warcRecord_Merge_RefBlockNotCached(t *testing.T) {
 	if got, want := got.Type(), Response; got != want {
 		t.Errorf("got.Type() = %#v, want %#v", got, want)
 	}
-	// WarcBlockDigest should have been deleted since ref block wasn't cached
-	if got := got.WarcHeader().Has(WarcBlockDigest); got {
-		t.Errorf("got.WarcHeader().Has(WarcBlockDigest) = %v, want false", got)
+	// The reconstructed digest covers the complete merged message.
+	if got := got.WarcHeader().Has(WarcBlockDigest); !got {
+		t.Errorf("got.WarcHeader().Has(WarcBlockDigest) = %v, want true", got)
 	}
 }
 
