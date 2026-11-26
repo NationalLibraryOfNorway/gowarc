@@ -91,6 +91,7 @@ func TestRecordBuilder(t *testing.T) {
 				[]WarcRecordOption{WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail), WithUnknownRecordTypePolicy(ErrIgnore)},
 				Response,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=response"},
@@ -104,6 +105,7 @@ func TestRecordBuilder(t *testing.T) {
 			},
 			want{
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "response"},
@@ -127,6 +129,7 @@ func TestRecordBuilder(t *testing.T) {
 				[]WarcRecordOption{WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail), WithUnknownRecordTypePolicy(ErrIgnore), WithFixDigest(false), WithAddMissingDigest(false)},
 				Request,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=request"},
@@ -142,6 +145,7 @@ func TestRecordBuilder(t *testing.T) {
 			},
 			want{
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "request"},
@@ -167,6 +171,7 @@ func TestRecordBuilder(t *testing.T) {
 				[]WarcRecordOption{WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrWarn), WithUnknownRecordTypePolicy(ErrIgnore), WithFixDigest(false), WithAddMissingDigest(false), WithFixSyntaxErrors(false)},
 				Request,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=request"},
@@ -182,6 +187,7 @@ func TestRecordBuilder(t *testing.T) {
 			},
 			want{
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "request"},
@@ -207,6 +213,7 @@ func TestRecordBuilder(t *testing.T) {
 				[]WarcRecordOption{WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail), WithUnknownRecordTypePolicy(ErrIgnore), WithFixDigest(false), WithAddMissingDigest(false)},
 				Request,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: ContentType, Value: "application/http;msgtype=request"},
@@ -222,6 +229,7 @@ func TestRecordBuilder(t *testing.T) {
 			},
 			want{
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "request"},

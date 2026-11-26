@@ -86,6 +86,7 @@ func TestValidateHeader(t *testing.T) {
 		{
 			"Illegal field 'Warc-Filename' in resource record",
 			&WarcFields{
+				&nameValue{Name: WarcTargetURI, Value: "https://example.org/"},
 				&nameValue{Name: WarcDate, Value: "2017-12-06T04:03:53Z"},
 				&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 				&nameValue{Name: WarcFilename, Value: "temp-20170306040353.warc.gz"},
@@ -148,6 +149,27 @@ func TestValidateHeader(t *testing.T) {
 				if err.Error() != tt.wantValidationErr.Error() {
 					t.Errorf("validateHeader() got validation error = %v, want error %v", err.Error(), tt.wantValidationErr.Error())
 				}
+			}
+		})
+	}
+}
+
+func TestValidateHeaderMissingTargetURI(t *testing.T) {
+	for _, rt := range []RecordType{Response, Resource, Request, Revisit, Conversion, Continuation, Metadata, Warcinfo} {
+		t.Run(rt.String(), func(t *testing.T) {
+			header := &WarcFields{
+				{Name: WarcType, Value: rt.String()},
+				{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
+				{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
+				{Name: ContentLength, Value: "0"},
+			}
+			_, warnings, err := validateHeader(header, V1_1, newOptions(WithStrictValidation()))
+			if rt == Metadata || rt == Warcinfo {
+				if err != nil || len(warnings) != 0 {
+					t.Fatalf("unexpected warnings %v or error %v", warnings, err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "missing required field: WARC-Target-URI") {
+				t.Fatalf("expected a missing WARC-Target-URI error, got %v", err)
 			}
 		})
 	}

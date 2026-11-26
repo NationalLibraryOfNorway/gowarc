@@ -93,6 +93,7 @@ func Test_unmarshaler_Unmarshal(t *testing.T) {
 			"valid response record",
 			[]WarcRecordOption{WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail), WithUnknownRecordTypePolicy(ErrIgnore), WithAddMissingDigest(false)},
 			"WARC/1.0\r\n" +
+				"WARC-Target-URI: http://example.com/\r\n" +
 				"WARC-Date: 2017-03-06T04:03:53Z\r\n" +
 				"WARC-Record-ID: <urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>\r\n" +
 				"WARC-Type: response\r\n" +
@@ -108,6 +109,7 @@ func Test_unmarshaler_Unmarshal(t *testing.T) {
 				V1_0,
 				Response,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "response"},
@@ -172,6 +174,7 @@ func Test_unmarshaler_Unmarshal(t *testing.T) {
 			"valid request record",
 			[]WarcRecordOption{WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail), WithUnknownRecordTypePolicy(ErrIgnore), WithAddMissingDigest(false)},
 			"WARC/1.0\r\n" +
+				"WARC-Target-URI: http://example.com/\r\n" +
 				"WARC-Date: 2017-03-06T04:03:53Z\r\n" +
 				"WARC-Record-ID: <urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>\r\n" +
 				"WARC-Type: request\r\n" +
@@ -190,6 +193,7 @@ func Test_unmarshaler_Unmarshal(t *testing.T) {
 				V1_0,
 				Request,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "request"},
@@ -764,6 +768,7 @@ func Test_unmarshaler_Unmarshal(t *testing.T) {
 			"short response record",
 			[]WarcRecordOption{WithSpecViolationPolicy(ErrFail), WithSyntaxErrorPolicy(ErrFail), WithUnknownRecordTypePolicy(ErrIgnore)},
 			"WARC/1.0\r\n" +
+				"WARC-Target-URI: http://example.com/\r\n" +
 				"WARC-Date: 2017-03-06T04:03:53Z\r\n" +
 				"WARC-Record-ID: <urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>\r\n" +
 				"WARC-Type: response\r\n" +
@@ -778,6 +783,7 @@ func Test_unmarshaler_Unmarshal(t *testing.T) {
 				V1_0,
 				Response,
 				&WarcFields{
+					&nameValue{Name: WarcTargetURI, Value: "http://example.com/"},
 					&nameValue{Name: WarcDate, Value: "2017-03-06T04:03:53Z"},
 					&nameValue{Name: WarcRecordID, Value: "<urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>"},
 					&nameValue{Name: WarcType, Value: "response"},

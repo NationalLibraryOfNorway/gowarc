@@ -113,6 +113,16 @@ func validateHeader(wf *WarcFields, version *WarcVersion, opts *warcRecordOption
 			}
 		}
 
+		if (Response|Resource|Request|Revisit|Conversion|Continuation)&rt != 0 && !wf.Has(WarcTargetURI) {
+			err := newHeaderFieldErrorf("", "missing required field: %s", WarcTargetURI)
+			switch opts.errSpec {
+			case ErrWarn:
+				validation = append(validation, err)
+			case ErrFail:
+				return rt, validation, err
+			}
+		}
+
 		// Check for illegal fields
 		if (Warcinfo|Conversion|Continuation)&rt != 0 && wf.Has(WarcConcurrentTo) {
 			switch opts.errSpec {

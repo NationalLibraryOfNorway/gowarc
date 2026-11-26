@@ -13,6 +13,7 @@ import (
 func uriTestHeader() *WarcFields {
 	wf := &WarcFields{}
 	wf.Set(WarcType, "resource")
+	wf.Set(WarcTargetURI, "https://example.org/")
 	wf.Set(WarcRecordID, "<urn:example:record>")
 	wf.Set(WarcDate, "2026-11-13T12:00:00Z")
 	wf.Set(ContentLength, "0")
