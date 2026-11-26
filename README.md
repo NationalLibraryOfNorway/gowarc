@@ -63,7 +63,7 @@ at https://iipc.github.io/warc-specifications/specifications/warc-format/warc-1.
 
 ### Requirements
 
-Go 1.27 or later is required. URL validation uses whatwg-url v0.9.0.
+Go 1.27 or later is required. URL validation uses whatwg-url v0.9.1.
 
 ### URI validation
 
