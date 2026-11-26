@@ -41,7 +41,7 @@ func TestHTTPTransferFramingDigests(t *testing.T) {
 			if err != nil || len(warnings) != 0 {
 				t.Fatalf("build: %v, %v", err, warnings)
 			}
-			defer rec.Close()
+			defer checkClose(t, rec)
 			check := func(rec WarcRecord) {
 				t.Helper()
 				block := rec.Block().(PayloadBlock)
@@ -74,7 +74,7 @@ func TestHTTPTransferFramingDigests(t *testing.T) {
 			if err != nil || len(warnings) != 0 {
 				t.Fatalf("unmarshal: %v, %v", err, warnings)
 			}
-			defer parsed.Close()
+			defer checkClose(t, parsed)
 			check(parsed)
 		})
 	}
@@ -122,7 +122,7 @@ func TestChunkedPayloadDigestValidation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer rec.Close()
+			defer checkClose(t, rec)
 			if tc.wantIssue != "" {
 				if len(warnings) != 1 || !strings.Contains(warnings[0].Error(), tc.wantIssue) {
 					t.Fatalf("warnings = %v, want %q", warnings, tc.wantIssue)

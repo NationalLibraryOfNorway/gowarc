@@ -918,7 +918,7 @@ func TestRecordBuilderExtensionRoundTrip(t *testing.T) {
 			if err != nil || len(w) != 0 {
 				t.Fatalf("Build: %v, %v", w, err)
 			}
-			defer r.Close()
+			defer checkClose(t, r)
 			var wire bytes.Buffer
 			if _, _, err := NewMarshaler().Marshal(&wire, r, 0); err != nil {
 				t.Fatal(err)
@@ -927,7 +927,7 @@ func TestRecordBuilderExtensionRoundTrip(t *testing.T) {
 			if err != nil || len(w) != 0 {
 				t.Fatalf("Unmarshal: %v, %v", w, err)
 			}
-			defer read.Close()
+			defer checkClose(t, read)
 			for _, name := range names {
 				if got := read.WarcHeader().Get(name); got != "blåbær" {
 					t.Errorf("%s = %q", name, got)
@@ -965,7 +965,7 @@ func TestRecordBuilderFieldSyntaxPolicy(t *testing.T) {
 				if err != nil || r == nil {
 					t.Fatalf("Build: %v, %v", r, err)
 				}
-				defer r.Close()
+				defer checkClose(t, r)
 				if tc.name == "WARC-BlocK-Digest" && r.WarcHeader().Has(WarcBlockDigest) && r.WarcHeader().Get(WarcBlockDigest) == tc.value {
 					t.Error("non-ASCII field name became WARC-Block-Digest")
 				}

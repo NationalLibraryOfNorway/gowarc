@@ -19,6 +19,7 @@ package gowarc
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http/httputil"
@@ -410,15 +411,14 @@ func (wr *warcRecord) Merge(record ...WarcRecord) (WarcRecord, error) {
 		checkLength = resp.httpStatusCode >= 200 && resp.httpStatusCode != 204 && resp.httpStatusCode != 304
 	}
 	base.httpHeaderBytes = head
-	bd.Write(head)
+	_, _ = bd.Write(head) // hash.Hash.Write always succeeds.
 	entity, err := donor.Block().(PayloadBlock).PayloadBytes()
 	if err != nil {
 		return nil, err
 	}
 	buf := diskbuffer.New(wr.opts.bufferOptions...)
 	if err := writeRevisitEntity(io.MultiWriter(buf, bd), base, io.TeeReader(entity, pd), checkLength); err != nil {
-		buf.Close()
-		return nil, err
+		return nil, errors.Join(err, buf.Close())
 	}
 	base.payload = buf
 	merged.closer = buf.Close
@@ -431,8 +431,7 @@ func (wr *warcRecord) Merge(record ...WarcRecord) (WarcRecord, error) {
 	if ref.Profile == ProfileIdenticalPayloadDigestV1_0 || ref.Profile == ProfileIdenticalPayloadDigestV1_1 {
 		if pd.hash != "" {
 			if err := pd.validate(); err != nil {
-				merged.Close()
-				return nil, fmt.Errorf("revisit payload: %w", err)
+				return nil, errors.Join(fmt.Errorf("revisit payload: %w", err), merged.Close())
 			}
 		} else {
 			h.Set(WarcPayloadDigest, base.PayloadDigest())

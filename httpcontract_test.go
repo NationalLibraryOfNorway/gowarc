@@ -37,7 +37,7 @@ func captureHTTP(t *testing.T, kind RecordType, raw string, fields ...string) Wa
 	if err != nil || len(warnings) != 0 {
 		t.Fatalf("build: %v, %v", warnings, err)
 	}
-	t.Cleanup(func() { rec.Close() })
+	t.Cleanup(func() { checkClose(t, rec) })
 	return rec
 }
 
@@ -137,13 +137,13 @@ func TestRevisitReplay(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer merged.Close()
+				defer checkClose(t, merged)
 				if revisit.Type() != Revisit || readHTTP(t, donor.Block().RawBytes) != donorRaw {
 					t.Fatal("merge changed an input")
 				}
-				revisit.Close()
-				donor.Close()
-				capture.Close()
+				checkClose(t, revisit)
+				checkClose(t, donor)
+				checkClose(t, capture)
 				verifyReplay(t, merged, kind)
 			})
 		}
@@ -169,7 +169,7 @@ func verifyReplay(t *testing.T, merged WarcRecord, kind RecordType) {
 		}
 		body, headers, trailers = req.Body, req.Header, req.Trailer
 	}
-	defer body.Close()
+	defer checkClose(t, body)
 	data, err := io.ReadAll(body)
 	if err != nil || string(data) != "hello" || headers.Get("X-Capture") != "new" || trailers.Get("X-Result") != "" {
 		t.Fatalf("replay: %q %v %v %v", data, err, headers, trailers)
@@ -200,7 +200,7 @@ func TestHistoricalRevisit(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer merged.Close()
+		defer checkClose(t, merged)
 		verifyReplay(t, merged, Response)
 	}
 }
@@ -222,7 +222,7 @@ func TestLegacyPayloadRepair(t *testing.T) {
 		if err != nil || len(warnings) != 1 {
 			t.Fatalf("legacy validation: %v, %v", warnings, err)
 		}
-		defer rec.Close()
+		defer checkClose(t, rec)
 		want := legacy
 		if repair {
 			want = helloDigest

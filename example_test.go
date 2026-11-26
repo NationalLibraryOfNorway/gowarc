@@ -151,7 +151,11 @@ func ExampleHttpBlock() {
 	if err != nil {
 		panic(err)
 	}
-	defer record.Close()
+	defer func() {
+		if err := record.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	block := record.Block().(gowarc.HttpBlock)
 	entity, err := block.PayloadBytes()
 	if err != nil {
